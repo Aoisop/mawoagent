@@ -276,7 +276,7 @@ class ToolBoundaryTests(unittest.IsolatedAsyncioTestCase):
     async def test_numbered_pages_remain_below_result_artifact_threshold(self):
         path = self.root / "page.txt"
         for line in ("好" * 100, "x" * 40, "x" * 100_000):
-            path.write_text((line + "\n") * (1 if len(line) > 1000 else 1001))
+            path.write_text((line + "\n") * (1 if len(line) > 1000 else 1001), encoding="utf-8")
             result = await tools.execute_tool("read_file", {"file_path": str(path)}, truncate_result=False)
             self.assertLess(len(result.encode("utf-8")), 30 * 1024)
             self.assertIn("Partial file", result)
