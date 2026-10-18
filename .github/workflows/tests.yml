@@ -34,6 +34,16 @@ jobs:
           grep -E '^(FAIL|ERROR):' test-output.txt | while IFS= read -r line; do
             echo "::error title=Test failure::$line"
           done
+          python - <<'PY'
+          import re
+          text = open('test-output.txt', encoding='utf-8', errors='replace').read()
+          for block in re.split(r'\n={70}\n', text):
+              lines = block.strip().splitlines()
+              if lines and lines[0].startswith(('FAIL:', 'ERROR:')):
+                  head = lines[0][:120]
+                  msg = '%0A'.join(line.replace('%', '%25') for line in lines[:30])
+                  print(f'::error title={head}::{msg}')
+          PY
       - run: git diff --check
   web-tests:
     runs-on: ubuntu-latest
