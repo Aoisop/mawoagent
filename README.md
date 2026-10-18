@@ -172,8 +172,6 @@ python -m agents.main --help
 
 ## 项目架构
 
-![mawoagent 总体架构](wiki/assets/architecture/01-overall-architecture.svg)
-
 核心运行链路：
 
 ```text
@@ -228,7 +226,6 @@ mawoagent/
 │   └── skill-evolution/           # Skills 自进化审计产物
 ├── docs/                          # Web 使用与运行可靠性说明
 ├── tests/                         # Python 回归测试
-├── wiki/                          # 项目文档中心
 ├── Dockerfile
 ├── .env.example                  # 模型配置模板
 ├── requirements.lock             # 固定版本依赖，安装时使用
@@ -390,11 +387,11 @@ python -m agents.eval_folding --cases data/folding_eval_smoke.jsonl --output .ma
 
 评测入口默认采用参考 DeepAgent 源码的三路并行记忆生成（事件、工作、工具）和每题最多 3 次折叠；可通过 `--fold-memory-mode single_json`、`--max-fold-limit N` 做本项目内部对照。`--fold-after-turn` 是 mawoagent 为短样例增加的固定触发，不是论文原始触发方式。此入口的工具环境与判分器仍不同于论文，生成的分数不能直接对标论文表格。
 
-汇总只对两组都完成、开启组确实折叠、关闭组未折叠且题目工具需求已审核的配对计算正确率；无效配对和原因保留在 `summary.json`。原始 GAIA/HLE 题目需先逐题审核所需工具并整理为带 `required_tools` 的 JSONL，文本题也可能需要当前入口不具备的联网能力。`review_queue.jsonl` 保存需人工复核的预测，详情见 Wiki。
+汇总只对两组都完成、开启组确实折叠、关闭组未折叠且题目工具需求已审核的配对计算正确率；无效配对和原因保留在 `summary.json`。原始 GAIA/HLE 题目需先逐题审核所需工具并整理为带 `required_tools` 的 JSONL，文本题也可能需要当前入口不具备的联网能力。`review_queue.jsonl` 保存需人工复核的预测，详情见 [项目评测.md](项目评测.md)。
 
 为避免单次模型回复过长，评测默认将主模型每次回复限制为 2048 token，可用 `--max-output-tokens` 调整；`--max-cost` 是回复完成后的估算检查，不能代替单次输出上限。
 
-样例仅用于确认评测链路；论文数字的出处、自行评测方式和结果口径见 [Wiki 评测部分](wiki/折叠评测部分.md)及 [项目评测.md](项目评测.md)。
+样例仅用于确认评测链路；论文数字的出处、自行评测方式和结果口径见 [项目评测.md](项目评测.md)。
 
 ## 开发验证
 
@@ -424,11 +421,9 @@ node --test web/tests/*.test.mjs
 
 - [Web 工作台：界面功能、启动与运行边界](docs/web-workspace.md)
 - [运行可靠性与 Skills 发布流程](docs/runtime-hardening.md)
-- [从 0 到 1 学习了解项目](wiki/从0到1学习了解项目.md)
-- [架构设计](wiki/架构设计.md)
-- [核心源码阅读指南](wiki/核心源码阅读指南.md)
-- [技术亮点](wiki/技术亮点.md)
-- [Skills 自进化逻辑与实现思路](wiki/Skills自进化逻辑与实现思路.md)
+- [项目评测](项目评测.md)
+- [在线 Skills 评测实现说明](在线Skills评测实现说明.md)
+- [项目深度分析与迭代方向](项目深度分析与迭代方向.md)
 
 ## 项目来源与署名
 
