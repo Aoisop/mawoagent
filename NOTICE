@@ -3,10 +3,6 @@ Copyright (c) 2026 Aoisop
 
 mawoagent-specific additions and modifications are maintained by Aoisop.
 
-This product includes software developed as part of
-claude-code-from-scratch:
-    Copyright (c) 2025 Windy3f3f3f3f
-    Licensed under the MIT License. See LICENSE.
 
 Third-party components keep their own authorship and terms:
 - data/*: third-party research artifacts
