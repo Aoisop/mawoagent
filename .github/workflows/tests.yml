@@ -31,6 +31,9 @@ jobs:
           echo '```text' >> "$GITHUB_STEP_SUMMARY"
           tail -n 120 test-output.txt >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+          grep -E '^(FAIL|ERROR):' test-output.txt | while IFS= read -r line; do
+            echo "::error title=Test failure::$line"
+          done
       - run: git diff --check
   web-tests:
     runs-on: ubuntu-latest
