@@ -34,7 +34,7 @@ class WebTests(unittest.TestCase):
         return self.app.conversations[state["id"]]
 
     def wait_state(self, view, predicate):
-        deadline = time.monotonic() + 4
+        deadline = time.monotonic() + 10
         with view.condition:
             while not predicate(view.snapshot):
                 remaining = deadline - time.monotonic()
@@ -325,8 +325,12 @@ class WebTests(unittest.TestCase):
             headers = {"Cookie":cookie,"Content-Type":"application/json"}
             if extra:headers["X-Mawoagent-CSRF"] = config["csrf"]
             headers.update(extra)
-            client.request("POST","/api/sessions",body="{}",headers=headers)
-            response = client.getresponse();self.assertEqual(response.status,403);response.read()
+            conn = http.client.HTTPConnection("127.0.0.1",server.server_port,timeout=3)
+            try:
+                conn.request("POST","/api/sessions",body="{}",headers=headers)
+                response = conn.getresponse();self.assertEqual(response.status,403);response.read()
+            finally:
+                conn.close()
         client.request("POST","/api/sessions",body="{}",headers={"Cookie":cookie,"Content-Type":"application/json","X-Mawoagent-CSRF":config["csrf"]})
         response = client.getresponse();self.assertEqual(response.status,200);sid=json.loads(response.read())["id"]
         client.request("GET","/api/events?session="+sid,headers={"Cookie":cookie})

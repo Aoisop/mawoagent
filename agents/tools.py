@@ -46,7 +46,10 @@ class FileVersion:
 
     @classmethod
     def from_stat(cls, value: os.stat_result) -> FileVersion:
-        return cls(value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns, value.st_ctime_ns)
+        # Windows reports a different st_ctime for path stat and open-handle
+        # fstat, so ctime cannot participate in change detection there.
+        changed_ns = 0 if os.name == "nt" else value.st_ctime_ns
+        return cls(value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns, changed_ns)
 
 
 class _FileResult(str):
@@ -190,7 +193,7 @@ def _auto_update_memory_index(file_path:str) -> None:
                 if f.name == "MEMORY.md":
                     continue
                 try:
-                    raw = f.read_text()
+                    raw = f.read_text(encoding="utf-8")
                     name_match = re.search(r"^name:\s*(.+)$", raw, re.MULTILINE)
                     type_match = re.search(r"^type:\s*(.+)$", raw, re.MULTILINE)
                     desc_match = re.search(r"^description:\s*(.+)$", raw, re.MULTILINE)
@@ -201,7 +204,7 @@ def _auto_update_memory_index(file_path:str) -> None:
                         lines.append(f"- **[{n}]({f.name})** ({t}) — {d}")
                 except Exception:
                     pass
-            (mem_path / "MEMORY.md").write_text("\n".join(lines))
+            (mem_path / "MEMORY.md").write_text("\n".join(lines), encoding="utf-8")
     except Exception:
         pass
 
@@ -244,7 +247,7 @@ def _edit_file(inp: ToolInput, expected_version=_UNTRACKED) -> str:
         path = _resolve_tool_path(inp["file_path"]).resolve()
         if expected_version is _UNTRACKED:
             expected_version = _file_version(path)
-        content = path.read_text(errors="replace")
+        content = path.read_text(encoding="utf-8", errors="replace")
 
         actual = _find_actual_string(content, inp["old_string"])
         if not actual:
@@ -476,7 +479,7 @@ def _load_settings(file_path: Path) -> dict | None:
     if not file_path.exists():
         return None
     try:
-        return json.loads(file_path.read_text())
+        return json.loads(file_path.read_text(encoding="utf-8"))
     except Exception:
         return None
 

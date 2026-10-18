@@ -37,10 +37,6 @@ def state_lock(path: Path):
         with path.with_name(path.name + ".lock").open("a+b") as stream:
             if os.name == "nt":
                 import msvcrt
-                stream.seek(0, os.SEEK_END)
-                if not stream.tell():
-                    stream.write(b"\0")
-                    stream.flush()
                 stream.seek(0)
                 msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK, 1)
             else:

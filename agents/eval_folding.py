@@ -342,7 +342,10 @@ async def _run_case(
 
 
 def _git_head() -> str:
-    result = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False)
+    try:
+        result = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return "unavailable"
     return result.stdout.strip() if result.returncode == 0 else "unavailable"
 
 

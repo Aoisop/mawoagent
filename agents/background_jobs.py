@@ -47,7 +47,7 @@ class BackgroundSkillTasks:
             if path.stem in self._background_job_ids:
                 continue
             try:
-                job = json.loads(path.read_text())
+                job = json.loads(path.read_text(encoding="utf-8"))
                 if not isinstance(job, dict):
                     raise ValueError("Invalid persisted Skill job")
                 if job.get("attempts", 0) >= 3:
@@ -70,7 +70,7 @@ class BackgroundSkillTasks:
                 from .storage import state_lock
                 with state_lock(path):
                     # Re-read ownership after acquiring the cross-process claim.
-                    latest = json.loads(path.read_text())
+                    latest = json.loads(path.read_text(encoding="utf-8"))
                     if latest.get("owner_pid") and latest.get("owner_session") != job.get("owner_session"):
                         coro.close()
                         continue
@@ -95,7 +95,7 @@ class BackgroundSkillTasks:
             job_id = job_id or uuid.uuid4().hex
             path = self._background_jobs_dir() / f"{job_id}.json"
             try:
-                previous = json.loads(path.read_text()) if path.exists() else {}
+                previous = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
                 record = {"data": job, "status": "queued", "attempts": previous.get("attempts", 0),
                           "owner_pid": os.getpid(), "owner_session": self.session_id}
                 write_json(path, record)

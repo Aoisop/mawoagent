@@ -135,7 +135,7 @@ def _resolve_includes(
             return f"<!-- not found: {raw} -->"
         try:
             visited.add(key)
-            included = resolved.read_text()
+            included = resolved.read_text(encoding="utf-8")
             return _resolve_includes(included, resolved.parent, visited, depth + 1)
         except Exception:
             return f"<!-- error reading: {raw} -->"
@@ -155,7 +155,7 @@ def _load_rules_dir(directory: Path) -> str:
         parts: list[str] = []
         for f in files:
             try:
-                content = f.read_text()
+                content = f.read_text(encoding="utf-8")
                 content = _resolve_includes(content, rules_dir)
                 parts.append(f"<!-- rule: {f.name} -->\n{content}")
             except Exception:
@@ -173,7 +173,7 @@ def load_claude_md() -> str:
         f = d / "CLAUDE.md"
         if f.is_file():
             try:
-                content = f.read_text()
+                content = f.read_text(encoding="utf-8")
                 content = _resolve_includes(content, d)
                 parts.insert(0, content)
             except Exception:

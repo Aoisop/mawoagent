@@ -247,7 +247,7 @@ class ToolBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_byte_limit_preserves_whole_lines_and_unicode(self):
         path = self.root / "wide.txt"
-        path.write_text("\n".join(["好" * 5000, "好" * 5000, "尾" * 5000]))
+        path.write_text("\n".join(["好" * 5000, "好" * 5000, "尾" * 5000]), encoding="utf-8")
         result = await tools.execute_tool("read_file", {"file_path": str(path)})
         self.assertIn("offset=2", result)
         self.assertNotIn("尾", result)
@@ -257,7 +257,7 @@ class ToolBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_giant_line_is_bounded_without_full_file_allocation(self):
         path = self.root / "giant.txt"
-        path.write_text("大" * 2_000_000 + "\nnext")
+        path.write_text("大" * 2_000_000 + "\nnext", encoding="utf-8")
         tracemalloc.start()
         try:
             result = tools._read_file({"file_path": str(path)})

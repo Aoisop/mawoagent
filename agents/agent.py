@@ -711,7 +711,7 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
             from .storage import write_json
             for path in self._background_jobs_dir().glob("*.json"):
                 try:
-                    job = json.loads(path.read_text())
+                    job = json.loads(path.read_text(encoding="utf-8"))
                     if job.get("owner_session") == self.session_id and job.get("status") != "running":
                         job["owner_pid"] = None
                         write_json(path, job)

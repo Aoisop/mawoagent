@@ -119,7 +119,7 @@ def _load_agents_from_dir(directory: Path, agents: dict[str, dict]) -> None:
         if not entry.suffix == ".md":
             continue
         try:
-            raw = entry.read_text()
+            raw = entry.read_text(encoding="utf-8")
             result = parse_frontmatter(raw)
             meta = result.meta
             name = meta.get("name") or entry.stem

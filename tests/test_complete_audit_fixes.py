@@ -324,10 +324,10 @@ class CompleteAuditDataTests(unittest.IsolatedAsyncioTestCase):
             first = memory.save_memory("代码偏好", "first", "user", "first preference")
             second = memory.save_memory("回答偏好", "second", "user", "second preference")
             self.assertNotEqual(first, second)
-            self.assertIn("first preference", (directory / first).read_text())
+            self.assertIn("first preference", (directory / first).read_text(encoding="utf-8"))
             with self.assertRaises(ValueError):
                 memory.delete_memory("../outside.md")
-            (directory / "large.md").write_text("中" * 5000)
+            (directory / "large.md").write_text("中" * 5000, encoding="utf-8")
             header = memory.MemoryHeader("large.md", str(directory / "large.md"), 0, "long", "user")
             with patch.object(memory, "scan_memory_headers", return_value=[header]):
                 selected = await memory.select_relevant_memories("query", AsyncMock(return_value='{"selected_memories":["large.md"]}'), set())

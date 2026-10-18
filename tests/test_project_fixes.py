@@ -299,13 +299,13 @@ class StateFixTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'example.txt'
             for text in ['a=“same”\nb=“same”\n', 'a=“same”\nb=″same″\n']:
-                path.write_text(text)
+                path.write_text(text, encoding="utf-8")
                 result = _edit_file({'file_path': str(path), 'old_string': '"same"', 'new_string': '"changed"'})
                 self.assertIn('Must be unique', result)
-                self.assertEqual(path.read_text(), text)
-            path.write_text('a=“same”\n')
+                self.assertEqual(path.read_text(encoding="utf-8"), text)
+            path.write_text('a=“same”\n', encoding="utf-8")
             self.assertIn('Successfully', _edit_file({'file_path': str(path), 'old_string': '"same"', 'new_string': '"changed"'}))
-            self.assertEqual(path.read_text(), 'a="changed"\n')
+            self.assertEqual(path.read_text(encoding="utf-8"), 'a="changed"\n')
 
     def test_failed_atomic_replace_preserves_original_and_cleans_temporary_file(self):
         with tempfile.TemporaryDirectory() as tmp:

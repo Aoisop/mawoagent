@@ -153,7 +153,7 @@ def load_memory_index() -> str:
     index_path = _get_index_path()
     if not index_path.exists():
         return ""
-    content = index_path.read_text()
+    content = index_path.read_text(encoding="utf-8")
     lines = content.split("\n")
     if len(lines) > MAX_INDEX_LINES:
         content = "\n".join(lines[:MAX_INDEX_LINES]) + "\n\n[... truncated, too many memory entries ...]"

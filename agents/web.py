@@ -490,7 +490,7 @@ class WebApp:
             report = None
             if report_path.is_file():
                 try:
-                    report = json.loads(report_path.read_text())
+                    report = json.loads(report_path.read_text(encoding="utf-8"))
                 except (OSError, ValueError) as exc:
                     errors.append("评测: " + self.safe_error(exc))
             return {"skills": skills, "memories": memories, "candidates": candidates, "report": report, "errors": errors}

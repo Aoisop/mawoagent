@@ -446,7 +446,7 @@ class McpManager:
         if not path.exists():
             return
         try:
-            raw = json.loads(path.read_text())
+            raw = json.loads(path.read_text(encoding="utf-8"))
             # 支持两种格式：
             # 1. {"mcpServers": {"name": {...}}}
             # 2. {"name": {...}}

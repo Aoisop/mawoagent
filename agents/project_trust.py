@@ -25,7 +25,7 @@ def project_fingerprint(project: Path | None = None) -> str:
 def is_project_trusted(project: Path | None = None) -> bool:
     project = (project or Path.cwd()).resolve()
     try:
-        records = json.loads(trust_file().read_text())
+        records = json.loads(trust_file().read_text(encoding="utf-8"))
         return records.get(str(project)) == project_fingerprint(project)
     except (OSError, ValueError, AttributeError):
         return False
@@ -35,7 +35,7 @@ def trust_project(project: Path | None = None) -> None:
     project = (project or Path.cwd()).resolve()
     path = trust_file()
     with state_lock(path):
-        records = json.loads(path.read_text()) if path.exists() else {}
+        records = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
         if not isinstance(records, dict):
             raise ValueError("Invalid project trust registry")
         records[str(project)] = project_fingerprint(project)

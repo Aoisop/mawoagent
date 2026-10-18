@@ -47,7 +47,7 @@ def load_session(session_id: str) -> dict[str, Any] | None:
     if not path.exists():
         return None
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except (ValueError, OSError):
         logging.exception("Unable to load session %s; original file preserved", path)
         return None
@@ -58,7 +58,7 @@ def list_sessions() -> list[dict[str, Any]]:
     results = []
     for f in SESSION_DIR.glob("*.json"):
         try:
-            data = json.loads(f.read_text())
+            data = json.loads(f.read_text(encoding="utf-8"))
             metadata = data.get("metadata")
             if isinstance(metadata, dict) and isinstance(metadata.get("cwd"), str):
                 results.append(metadata)

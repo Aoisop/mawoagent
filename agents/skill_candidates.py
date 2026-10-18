@@ -134,7 +134,7 @@ def apply_candidate(candidate_id: str, *, manual_review: bool = False, expected_
             if not manual_review:
                 from .online_skill_eval import _lineage_id_for_skill
                 registry = get_evolution_dir() / "online-eval" / "champions.json"
-                champion = (json.loads(registry.read_text()).get("champions", {}).get(_lineage_id_for_skill(candidate["skill"]), {})
+                champion = (json.loads(registry.read_text(encoding="utf-8")).get("champions", {}).get(_lineage_id_for_skill(candidate["skill"]), {})
                             if registry.exists() else {})
                 if champion.get("snapshot") != snapshot:
                     return {"ok": False, "error": "candidate has no matching passed evaluation; evaluate or explicitly use --manual-review"}
@@ -167,7 +167,7 @@ def rollback_skill(name: str) -> dict:
     if not history.is_file():
         return {"ok": False, "error": "No pre-change snapshot found"}
     with state_lock(target), state_lock(history):
-        rows = [json.loads(line) for line in history.read_text().splitlines() if line.strip()]
+        rows = [json.loads(line) for line in history.read_text(encoding="utf-8").splitlines() if line.strip()]
         snapshot = next((row for row in reversed(rows) if row.get("event") == "snapshot"
                          and row.get("file") == str(target) and isinstance(row.get("content"), str)), None)
         if snapshot is None:
@@ -175,7 +175,7 @@ def rollback_skill(name: str) -> dict:
         # Save the current version too, making an explicit rollback reversible.
         from .storage import append_jsonl
         append_jsonl(history, {"event": "snapshot", "actor": "rollback", "skill": name,
-                              "file": str(target), "content": target.read_text()})
+                              "file": str(target), "content": target.read_text(encoding="utf-8")})
         atomic_write_text(target, snapshot["content"])
         reset_skill_cache()
         return {"ok": True, "skill": name, "file": str(target)}

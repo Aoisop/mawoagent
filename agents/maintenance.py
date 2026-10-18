@@ -20,7 +20,7 @@ def cleanup_candidates(days: int = 30) -> list[Path]:
             paths.append(path)
     evaluation = get_evolution_dir() / "online-eval"
     registry = evaluation / "champions.json"
-    champions = json.loads(registry.read_text()).get("champions", {}) if registry.exists() else {}
+    champions = json.loads(registry.read_text(encoding="utf-8")).get("champions", {}) if registry.exists() else {}
     protected = {record.get("run_id") for record in champions.values()}
     for path in (evaluation / "runs").glob("*/*"):
         if (path.is_dir() and not path.is_symlink() and evaluation.resolve() in path.resolve().parents
