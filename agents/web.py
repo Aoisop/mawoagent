@@ -677,6 +677,18 @@ class WebHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             self.send_json(500, {"error": self.server.app.safe_error(exc)})
 
+    def _drain_request_body(self):
+        """Consume an unread POST body before closing so Windows clients do not get an RST."""
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+        except (TypeError, ValueError):
+            return
+        if 0 < size <= 512000:
+            try:
+                self.rfile.read(size)
+            except (OSError, ValueError):
+                pass
+
     def do_POST(self):
         try:
             self.guard(mutation=True)
@@ -691,6 +703,7 @@ class WebHandler(BaseHTTPRequestHandler):
                 raise WebError("无效的请求内容。")
             self.send_json(200, self.server.app.call(self.server.app.dispatch("POST", urlsplit(self.path).path, body)))
         except WebError as exc:
+            self._drain_request_body()
             self.close_connection = True
             self.send_json(exc.status, {"error": str(exc)})
         except (ValueError, UnicodeError):
