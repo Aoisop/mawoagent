@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="theme-color" content="#171819">
+  <title>mawoagent · 工作台</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="项目与会话">
+      <a class="wordmark" href="/">mawoagent<span class="brand-note">你的本地 AI 工作空间</span></a>
+      <div class="project-switch"><span class="project-icon" data-icon="folder"></span><span id="project-name">当前项目</span><span class="local-tag">本地</span></div>
+      <button class="new-chat" id="new-chat"><span data-icon="plus"></span>新建会话<kbd>⌘ K</kbd></button>
+      <nav class="primary-nav" aria-label="主导航">
+        <button data-page="workspace" class="nav-item active"><span data-icon="home"></span>工作台</button>
+        <button data-page="skills" class="nav-item"><span data-icon="grid"></span>Skills<span class="nav-count" id="skill-count"></span></button>
+        <button data-page="evaluation" class="nav-item"><span data-icon="chart"></span>评测</button>
+        <button data-page="memory" class="nav-item"><span data-icon="database"></span>记忆</button>
+      </nav>
+      <div class="session-heading"><span>最近会话</span><button class="icon-button" id="refresh-sessions" title="刷新会话" aria-label="刷新会话"><span data-icon="refresh"></span></button></div>
+      <div id="sessions" class="session-list"><p class="sidebar-hint">正在加载会话…</p></div>
+      <div class="sidebar-bottom"><button data-page="settings" class="nav-item"><span data-icon="settings"></span>设置</button><div class="connection"><i id="connection-dot"></i><span id="connection-label">连接本地服务</span><span class="version">WEB</span></div></div>
+    </aside>
+    <div class="mobile-scrim" id="mobile-scrim" hidden></div>
+    <div class="main-shell">
+      <header class="topbar">
+        <button class="icon-button mobile-menu" id="mobile-menu" aria-label="打开导航"><span data-icon="menu"></span></button>
+        <div class="breadcrumb"><span class="breadcrumb-icon" data-icon="folder"></span><span id="breadcrumb-project">mawoagent</span><span class="slash">/</span><span id="breadcrumb-title">新会话</span></div>
+        <span class="mode-chip" id="header-mode">默认权限</span>
+        <div class="topbar-end"><span class="local-status">本地工作区</span><button class="icon-button" id="toggle-inspector" title="切换任务详情" aria-label="切换任务详情" aria-controls="inspector"><span data-icon="panel"></span></button></div>
+      </header>
+      <div class="workspace" id="workspace">
+        <main class="chat-panel" aria-label="对话工作区">
+          <div class="chat-scroll" id="chat-scroll" tabindex="0" aria-label="聊天记录">
+            <div class="chat-content">
+              <div class="conversation-heading" id="conversation-heading"><h1 id="conversation-title">新会话</h1><p>每一步执行，都清晰可见。</p></div>
+              <div id="messages" aria-live="polite" aria-relevant="additions text"></div>
+            </div>
+          </div>
+          <div class="latest-message-control"><button type="button" class="latest-message-button" id="latest-message" hidden><span data-icon="arrow-up"></span>回到最新消息</button></div>
+          <div class="composer-region">
+            <div class="attachment-list" id="attachments"></div>
+            <form class="composer" id="composer">
+              <label class="sr-only" for="prompt">描述任务</label>
+              <textarea id="prompt" rows="2" placeholder="描述你想完成的任务，输入 / 调用 Skill…" maxlength="100000"></textarea>
+              <div class="composer-toolbar">
+                <button type="button" class="text-button" id="attach-file" title="添加文本文件"><span data-icon="paperclip"></span><span>添加文件</span></button>
+                <span class="toolbar-divider"></span>
+                <label class="permission-select"><span data-icon="shield"></span><select id="permission-mode" aria-label="权限模式"><option value="default">默认权限</option><option value="plan">只读计划</option><option value="acceptEdits">自动接受编辑</option><option value="dontAsk">自动拒绝授权</option></select></label>
+                <button type="submit" class="send-button" id="send-button" aria-label="发送任务" title="发送任务 · Enter"><span data-icon="arrow-up"></span></button>
+                <button type="button" class="stop-button" id="stop-button" hidden><span data-icon="stop"></span>停止</button>
+              </div>
+            </form>
+            <input type="file" id="file-input" accept=".txt,.md,.py,.js,.ts,.tsx,.jsx,.json,.yaml,.yml,.toml,.css,.html,.csv,.log,.sh,.sql,.xml" multiple hidden>
+            <div class="composer-footnote"><span id="model-label">模型配置加载中</span><span>Enter 发送 · Shift + Enter 换行</span></div>
+          </div>
+        </main>
+        <aside class="inspector" id="inspector" aria-label="任务详情">
+          <div class="inspector-title"><h2>任务详情</h2><span id="run-status" class="tiny-badge">就绪</span></div>
+          <div class="inspector-tabs" role="tablist" aria-label="任务详情分类"><button class="selected" id="plan-tab" role="tab" aria-selected="true">执行</button><button id="files-tab" role="tab" aria-selected="false">文件</button></div>
+          <div id="execution-panel" class="inspector-section"><div id="task-timeline"></div></div>
+          <div class="inspector-section"><div class="section-label"><h3>变更文件</h3><span id="file-count"></span></div><div id="changed-files" class="muted-empty">尚无文件变更</div></div>
+          <div class="inspector-section"><div class="section-label"><h3>Skills 候选</h3><button class="text-button" data-page="skills">查看<span data-icon="arrow-right"></span></button></div><div id="candidate-preview" class="muted-empty">暂无待审核候选</div><p class="inspector-note">评测通过或人工审核后发布</p></div>
+          <div class="usage-section"><div class="section-label"><span>本次会话 Token</span><span id="token-total">0</span></div><div class="usage-details"><span>输入 <b id="input-tokens">0</b></span><span>输出 <b id="output-tokens">0</b></span></div></div>
+        </aside>
+      </div>
+      <main id="library-page" class="library-page" hidden></main>
+    </div>
+  </div>
+  <div id="toast" class="toast" role="status" hidden></div>
+  <dialog id="detail-dialog"><div class="dialog-heading"><h2 id="detail-title"></h2><button class="icon-button" id="close-detail" aria-label="关闭详情"><span data-icon="close"></span></button></div><div id="detail-body" class="detail-body"></div></dialog>
+</body>
+</html>

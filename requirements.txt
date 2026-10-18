@@ -1,0 +1,6 @@
+anthropic>=0.25.0
+openai>=1.0.0
+python-dotenv>=1.0.0
+rich>=13.0.0
+tqdm>=4.66.0
+jsonschema==4.25.1

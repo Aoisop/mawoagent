@@ -1,0 +1,1 @@
+{"id":"smoke-color","prompts":["For this session, the project code word is BLUE. Reply only ACK.","Remember the project code word from the first message. Reply only ACK.","What is the project code word? Answer with the word only."],"answer":"BLUE"}

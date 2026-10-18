@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1440" viewBox="0 0 1080 1440">
+  <defs><style>.bg{fill:#fbfcfb}.header{fill:#eef6ff;stroke:#c9d7e9;stroke-width:1.6}.panel{fill:#f7fcf9;stroke:#cfe3d7;stroke-width:1.5}.card{fill:#fff;stroke:#d7e1df;stroke-width:1.4}.blue{fill:#3165b7}.green{fill:#14945b}.orange{fill:#f47d22}.purple{fill:#6045a9}.title{font:800 58px "PingFang SC","Microsoft YaHei",Arial;fill:#13213b}.subtitle{font:700 26px "PingFang SC","Microsoft YaHei",Arial;fill:#08733d}.body{font:500 22px "PingFang SC","Microsoft YaHei",Arial;fill:#25324b}.section{font:800 31px "PingFang SC","Microsoft YaHei",Arial;fill:#08733d}.label{font:800 24px "PingFang SC","Microsoft YaHei",Arial;fill:#17243d}.small{font:500 18px "PingFang SC","Microsoft YaHei",Arial;fill:#25324b}.muted{font:500 18px "PingFang SC","Microsoft YaHei",Arial;fill:#657284}.shadow{filter:url(#shadow)}</style><filter id="shadow"><feDropShadow dx="0" dy="7" stdDeviation="9" flood-color="#d8e1df" flood-opacity=".42"/></filter></defs>
+  <rect class="bg" width="1080" height="1440"/>
+  <rect class="header shadow" x="36" y="34" width="1008" height="230" rx="24"/>
+  <text class="title" x="72" y="112">mawoagent 升级了</text>
+  <text class="subtitle" x="74" y="162">自进化 Skills · Agentic Harness · MCP 工具扩展</text>
+  <text class="body" x="74" y="208">一个能把用户反馈沉淀成长期技能的命令行 Coding Agent</text>
+  <rect class="panel shadow" x="36" y="300" width="1008" height="230" rx="22"/>
+  <text class="section" x="72" y="354">项目最大亮点</text>
+  <text class="body" x="72" y="402">不只是完成当前任务，而是把稳定经验沉淀成可复用 SKILL.md。</text>
+  <g transform="translate(72,438)"><rect class="card" width="210" height="64" rx="16"/><circle class="green" cx="36" cy="32" r="18"/><text class="small" x="70" y="39">pending window</text></g>
+  <g transform="translate(310,438)"><rect class="card" width="210" height="64" rx="16"/><circle class="blue" cx="36" cy="32" r="18"/><text class="small" x="70" y="39">Extractor</text></g>
+  <g transform="translate(548,438)"><rect class="card" width="210" height="64" rx="16"/><circle class="orange" cx="36" cy="32" r="18"/><text class="small" x="70" y="39">add / merge</text></g>
+  <g transform="translate(786,438)"><rect class="card" width="210" height="64" rx="16"/><circle class="purple" cx="36" cy="32" r="18"/><text class="small" x="70" y="39">provenance</text></g>
+  <rect class="panel shadow" x="36" y="570" width="1008" height="330" rx="22"/>
+  <text class="section" x="72" y="624">核心能力</text>
+  <g transform="translate(72,670)"><rect class="card" width="286" height="92" rx="16"/><text class="label" x="34" y="38">Agentic Harness</text><text class="muted" x="34" y="68">模型、工具、权限统一编排</text></g>
+  <g transform="translate(397,670)"><rect class="card" width="286" height="92" rx="16"/><text class="label" x="34" y="38">Memory + Skills</text><text class="muted" x="34" y="68">事实和方法分层沉淀</text></g>
+  <g transform="translate(722,670)"><rect class="card" width="286" height="92" rx="16"/><text class="label" x="34" y="38">MCP / 子 Agent</text><text class="muted" x="34" y="68">外部工具和任务拆分</text></g>
+  <g transform="translate(236,790)"><rect class="card" width="286" height="72" rx="16"/><text class="label" x="34" y="44">Plan Mode</text></g>
+  <g transform="translate(558,790)"><rect class="card" width="286" height="72" rx="16"/><text class="label" x="34" y="44">Docker 部署</text></g>
+  <rect class="panel shadow" x="36" y="940" width="1008" height="330" rx="22"/>
+  <text class="section" x="72" y="994">已经沉淀出的项目级 Skill</text>
+  <rect class="card" x="74" y="1040" width="932" height="110" rx="18"/>
+  <text class="label" x="112" y="1084">政府报告撰写-正式书面化与政策结合</text>
+  <text class="muted" x="112" y="1122">来自用户反馈：字数控制、书面化表达、结合国家政策</text>
+  <text class="body" x="74" y="1208">审计产物：online_provenance.jsonl / skill_usage_stats.json / usage.jsonl</text>
+  <text class="subtitle" x="300" y="1340">mawoagent · Evolvable CLI Coding Agent</text>
+</svg>
+

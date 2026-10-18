@@ -1,0 +1,14 @@
+mawoagent
+Copyright (c) 2026 Aoisop
+
+mawoagent-specific additions and modifications are maintained by Aoisop.
+
+This product includes software developed as part of
+claude-code-from-scratch:
+    Copyright (c) 2025 Windy3f3f3f3f
+    Licensed under the MIT License. See LICENSE.
+
+Third-party components keep their own authorship and terms:
+- .mawoagent/skills/zhangxuefeng-skill-main: MIT, Copyright (c) 花叔 Huashu
+- .mawoagent/skills/Chinese-WebNovel-Skill: no license or author declaration found
+- paper/*.pdf and data/*: third-party research artifacts
