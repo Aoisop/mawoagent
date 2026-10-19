@@ -9,6 +9,7 @@ claude-code-from-scratch:
     Licensed under the MIT License. See LICENSE.
 
 Third-party components keep their own authorship and terms:
-- .mawoagent/skills/zhangxuefeng-skill-main: MIT, Copyright (c) 花叔 Huashu
-- .mawoagent/skills/Chinese-WebNovel-Skill: no license or author declaration found
-- paper/*.pdf and data/*: third-party research artifacts
+- data/*: third-party research artifacts
+
+Third-party skills and paper PDFs that were previously bundled are no longer
+distributed with this repository.
