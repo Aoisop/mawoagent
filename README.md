@@ -440,7 +440,7 @@ node --test web/tests/*.test.mjs
 
 - [Web 工作台：界面功能、启动与运行边界](docs/web-workspace.md)
 - [运行可靠性与 Skills 发布流程](docs/runtime-hardening.md)
-- [项目深度分析与迭代方向](docs/iteration-strategy-2026-10-18.md)
+- [项目迭代计划表（2026-10-19）](docs/iteration-roadmap-2026-10-19.md)
 - [最近修改记录（2026-10-15）](最近修改记录-2026-10-15.md)
 
 ### 项目来源与署名
@@ -897,7 +897,7 @@ Coverage includes session increments, drafts and attachments, chat scrolling, Ma
 
 - [Web workbench: UI features, startup, and runtime boundaries](docs/web-workspace.md)
 - [Runtime reliability and the Skills publishing flow](docs/runtime-hardening.md)
-- [Project analysis and iteration strategy](docs/iteration-strategy-2026-10-18.md)
+- [Iteration roadmap (2026-10-19)](docs/iteration-roadmap-2026-10-19.md)
 - [Recent changes (2026-10-15)](最近修改记录-2026-10-15.md)
 
 ### Origin and attribution
