@@ -22,7 +22,7 @@ The focus is the **Harness**: the model proposes actions, and the Runtime decide
 
 #### 1. Prepare the environment and install dependencies
 
-Python **3.11 or 3.12** is recommended. The commands below target macOS / Linux. Git is used to fetch the code; ripgrep is optional. Node.js is not required to run the web workbench, but is needed for frontend tests or for MCP tools that depend on Node.js.
+Python **3.11, 3.12 and 3.13** all work. CI verifies 3.11 and 3.12 on Linux, macOS and Windows; 3.13 has been verified only on Windows so far, so treat it as untested on the other two platforms (see the [environment baseline](docs/t01-environment-baseline-2026-10-20.md)). The commands below target macOS / Linux. Git is used to fetch the code; ripgrep is optional. Node.js is not required to run the web workbench, but is needed for frontend tests or for MCP tools that depend on Node.js.
 
 Run these commands in the **mawoagent repository root**:
 
@@ -38,18 +38,20 @@ source .venv/bin/activate
 python -m pip install -r requirements.lock
 ```
 
-If the default `python3` is not suitable, create the environment with `python3.12 -m venv .venv` instead. After the first setup, you only need to activate the existing environment; do not create or install it again.
+If the default `python3` is not suitable, create the environment with `python3.12 -m venv .venv` instead, substituting whichever supported version you actually have. After the first setup, you only need to activate the existing environment; do not create or install it again.
 
 On Windows, the same steps can be done in PowerShell:
 
 ```powershell
-py -3.12 -m venv .venv
+py -3 -m venv .venv          # or py -3.12, py -3.11, py -3.13
 .venv\Scripts\Activate.ps1
 python -m pip install -r requirements.lock
 Copy-Item .env.example .env   # skip if .env already exists
 ```
 
 Start later with `.venv\Scripts\python.exe -m agents.web`, or activate the environment with `.venv\Scripts\Activate.ps1` and run `python -m agents.web`.
+
+Two checks confirm a freshly built environment matches the pinned set: `python -m pip check` reports no broken requirements, and `python -m unittest discover -s tests -q` passes offline against the mock model. The results recorded for this repository are in the [environment baseline](docs/t01-environment-baseline-2026-10-20.md).
 
 #### 2. Configure the model connection
 
@@ -441,6 +443,7 @@ Coverage includes session increments, drafts and attachments, chat scrolling, Ma
 - [Web workbench: UI features, startup, and runtime boundaries](docs/web-workspace.md)
 - [Runtime reliability and the Skills publishing flow](docs/runtime-hardening.md)
 - [Iteration roadmap (2026-10-19)](docs/iteration-roadmap-2026-10-19.md)
+- [T01 environment baseline: Python setup and test results (2026-10-20)](docs/t01-environment-baseline-2026-10-20.md)
 - [Recent changes (2026-10-15)](最近修改记录-2026-10-15.md)
 
 ### Origin and attribution
@@ -479,7 +482,7 @@ mawoagent 是一个由 Aoisop 创建和维护的、基于 Python 的本地 **Age
 
 #### 1. 准备环境并安装依赖
 
-推荐使用 Python **3.11 或 3.12**，以下命令适用于 macOS / Linux。Git 用于获取代码，ripgrep 可选；仅运行网页工作台不需要 Node.js。运行前端测试或使用依赖 Node.js 的 MCP 工具时，再准备 Node.js 环境。
+Python **3.11、3.12、3.13** 均可使用。CI 在 Linux、macOS 与 Windows 上验证 3.11 和 3.12；3.13 目前只在 Windows 上验证过，其余两个平台尚未测试（见[环境基线](docs/t01-environment-baseline-2026-10-20.md)）。以下命令适用于 macOS / Linux。Git 用于获取代码，ripgrep 可选；仅运行网页工作台不需要 Node.js。运行前端测试或使用依赖 Node.js 的 MCP 工具时，再准备 Node.js 环境。
 
 在 **mawoagent 仓库根目录**执行：
 
@@ -495,18 +498,20 @@ source .venv/bin/activate
 python -m pip install -r requirements.lock
 ```
 
-如果默认 `python3` 版本不合适，可将创建虚拟环境的命令改为 `python3.12 -m venv .venv`。后续启动时只需激活已有虚拟环境，不必重复创建或安装。
+如果默认 `python3` 版本不合适，可将创建虚拟环境的命令改为 `python3.12 -m venv .venv`，替换成本机实际安装的受支持版本。后续启动时只需激活已有虚拟环境，不必重复创建或安装。
 
 Windows 用户可以用 PowerShell 完成同样的步骤：
 
 ```powershell
-py -3.12 -m venv .venv
+py -3 -m venv .venv          # 也可用 py -3.12、py -3.11、py -3.13
 .venv\Scripts\Activate.ps1
 python -m pip install -r requirements.lock
 Copy-Item .env.example .env   # 已有 .env 时跳过
 ```
 
 后续启动使用 `.venv\Scripts\python.exe -m agents.web`，或先执行 `.venv\Scripts\Activate.ps1` 再运行 `python -m agents.web`。
+
+可以用两条检查确认新建环境与锁定版本一致：`python -m pip check` 不报告依赖冲突；`python -m unittest discover -s tests -q` 在离线 mock 模型下全部通过。本仓库记录的实际结果见[环境基线](docs/t01-environment-baseline-2026-10-20.md)。
 
 #### 2. 配置模型连接
 
@@ -898,6 +903,7 @@ node --test web/tests/*.test.mjs
 - [Web 工作台：界面功能、启动与运行边界](docs/web-workspace.md)
 - [运行可靠性与 Skills 发布流程](docs/runtime-hardening.md)
 - [项目迭代计划表（2026-10-19）](docs/iteration-roadmap-2026-10-19.md)
+- [T01 环境基线：Python 环境与测试结果（2026-10-20）](docs/t01-environment-baseline-2026-10-20.md)
 - [最近修改记录（2026-10-15）](最近修改记录-2026-10-15.md)
 
 ### 项目来源与署名
