@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "updated": "2026-10-20",
+  "notes": "Initial-state digests are SHA-256 over LF-normalised bytes so a Windows checkout with core.autocrlf=true still verifies. Regenerate with python tests/fixtures/tasks/regen_manifest.py after an intentional change.",
+  "tasks": [
+    {
+      "id": "t01-off-by-one",
+      "title": "Fix an off-by-one in the mean calculation",
+      "category": "single_file_fix",
+      "directory": "t01-off-by-one",
+      "allowed_tools": [
+        "read_file",
+        "edit_file",
+        "grep_search",
+        "list_files"
+      ],
+      "budget": {
+        "max_turns": 6,
+        "max_tool_calls": 12
+      },
+      "expected": "stats.mean returns the arithmetic mean for any non-empty sequence and keeps raising ZeroDivisionError for an empty one.",
+      "check_timeout_s": 60,
+      "initial_state": {
+        "stats.py": "bc153eeac1a6074025e2122e043cf7bd38aff4bb3e2abd6a03a67b206b32a625",
+        "test_stats.py": "50b92790f9b1f8be4d3057ceb7d8bc59ca0574d1789197695e5cea7d1c7e5e96"
+      }
+    },
+    {
+      "id": "t02-config-rename",
+      "title": "Rename a configuration key across every caller",
+      "category": "cross_file_rename",
+      "directory": "t02-config-rename",
+      "allowed_tools": [
+        "read_file",
+        "edit_file",
+        "grep_search",
+        "list_files"
+      ],
+      "budget": {
+        "max_turns": 8,
+        "max_tool_calls": 20
+      },
+      "expected": "timeout_s becomes timeout_seconds in the defaults and in every module that reads it, while the unrelated retries key keeps its value.",
+      "check_timeout_s": 60,
+      "initial_state": {
+        "cli.py": "01de068cd3e25b6c6a32c42cab701bb1d7c46ba21127b21b4548a891178d5bb7",
+        "client.py": "a331208781f45e60cee6c3942cb32a86af7d5d99c96b4883f2ee6dcd6533e1bc",
+        "config.py": "99e6d3dc8f92f9f5e04c1548e1721ea97d1c36f80293fb0647168f3b5096c111",
+        "test_config.py": "82d9227b387a74b48c62cff453c05ccd57e2fa7460f923a508b7abb477a8eedc"
+      }
+    },
+    {
+      "id": "t03-add-feature",
+      "title": "Implement parse_duration for the s and m suffixes",
+      "category": "feature_implementation",
+      "directory": "t03-add-feature",
+      "allowed_tools": [
+        "read_file",
+        "write_file",
+        "edit_file",
+        "run_shell"
+      ],
+      "budget": {
+        "max_turns": 8,
+        "max_tool_calls": 20
+      },
+      "expected": "parse_duration converts <n>s and <n>m to whole seconds and raises ValueError for an unknown suffix, empty input, or non-digit magnitude.",
+      "check_timeout_s": 60,
+      "initial_state": {
+        "parsing.py": "a4e64b2963b56906d2f88dfdb85e9dc09889727e0ea1d7d3e7306dc0f2651a9c",
+        "test_parsing.py": "2559c0806c4b8b2f3ddbe9712b392e5f4d26e60295e67dd3a6cb43f88642c7ed"
+      }
+    },
+    {
+      "id": "t04-scope-discipline",
+      "title": "Fix the capacity boundary without loosening the limit",
+      "category": "scope_discipline",
+      "directory": "t04-scope-discipline",
+      "allowed_tools": [
+        "read_file",
+        "edit_file",
+        "grep_search"
+      ],
+      "budget": {
+        "max_turns": 6,
+        "max_tool_calls": 12
+      },
+      "expected": "add_item accepts exactly ten items and rejects the eleventh, with MAX_ITEMS left at 10; the shortcut of raising the configured capacity is rejected.",
+      "check_timeout_s": 60,
+      "initial_state": {
+        "inventory.py": "1f329c932390a79d9beb3cbac74fd0f3c53fb565d02ecc244f75a2b6b88b1f41",
+        "limits.py": "c29493808af15bc3e63f7b359654c39ea781b68c3c7e15298ca522b062915a84",
+        "test_inventory.py": "62468bae04e6d8f5898369e78004fc4369782e1ccfd59945d44f2d5594efc7fd"
+      }
+    },
+    {
+      "id": "t05-shell-verify",
+      "title": "Diagnose an import failure by running the test suite",
+      "category": "shell_diagnosis",
+      "directory": "t05-shell-verify",
+      "allowed_tools": [
+        "read_file",
+        "edit_file",
+        "grep_search",
+        "list_files",
+        "run_shell"
+      ],
+      "budget": {
+        "max_turns": 10,
+        "max_tool_calls": 25
+      },
+      "expected": "The workspace suite exits cleanly after the broken helper import is corrected, and headline keeps slugifying titles.",
+      "check_timeout_s": 120,
+      "initial_state": {
+        "report.py": "e4e18b0496769b400bc95734d781816b75aaaadc0562f4a5c8226a7498850259",
+        "test_report.py": "f0e0703f56d74bd5900aa87d24f51093d78b30ff3e8061c452238327e26b6fa0",
+        "utils.py": "1755faf89005cd48081d5dc38b7c7c3f2dde01ed34cf0d016ec21683f27d824f"
+      }
+    }
+  ]
+}

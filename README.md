@@ -438,6 +438,8 @@ node --test web/tests/*.test.mjs
 
 Coverage includes session increments, drafts and attachments, chat scrolling, Markdown rendering, and web permission and HTTP access boundaries. Model quality and Skill generalization require separate evaluation.
 
+Coding-task fixtures with fixed initial states, allowed tools, budgets, and programmatic checks live in [tests/fixtures/tasks](tests/fixtures/tasks/README.md); `python -m unittest tests.test_task_fixtures` verifies that every fixture fails unsolved and passes against its reference solution.
+
 ### More documentation
 
 - [Web workbench: UI features, startup, and runtime boundaries](docs/web-workspace.md)
@@ -897,6 +899,8 @@ node --test web/tests/*.test.mjs
 ```
 
 测试覆盖会话增量、草稿与附件、聊天滚动、Markdown 排版，以及 Web 权限与 HTTP 访问边界。模型效果和 Skill 泛化能力需要另行评测。
+
+带固定初始状态、允许工具、预算和程序化检查的编码任务样本放在 [tests/fixtures/tasks](tests/fixtures/tasks/README.md)；执行 `python -m unittest tests.test_task_fixtures` 会校验每个样本在未解决时验收失败、套用参考解后验收通过。
 
 ### 更多文档
 
