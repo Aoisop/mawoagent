@@ -463,6 +463,7 @@ Coding-task fixtures with fixed initial states, allowed tools, budgets, and prog
 - [Web workbench: UI features, startup, and runtime boundaries](docs/web-workspace.md)
 - [Runtime reliability and the Skills publishing flow](docs/runtime-hardening.md)
 - [Iteration roadmap (2026-10-19)](docs/iteration-roadmap-2026-10-19.md)
+- [Iteration progress: delivered tasks and open risks](docs/iteration-progress.md)
 - [T01 environment baseline: Python setup and test results (2026-10-20)](docs/t01-environment-baseline-2026-10-20.md)
 - [Recent changes (2026-10-15)](最近修改记录-2026-10-15.md)
 
@@ -943,6 +944,7 @@ node --test web/tests/*.test.mjs
 - [Web 工作台：界面功能、启动与运行边界](docs/web-workspace.md)
 - [运行可靠性与 Skills 发布流程](docs/runtime-hardening.md)
 - [项目迭代计划表（2026-10-19）](docs/iteration-roadmap-2026-10-19.md)
+- [迭代进度表：已交付任务与未闭合风险](docs/iteration-progress.md)
 - [T01 环境基线：Python 环境与测试结果（2026-10-20）](docs/t01-environment-baseline-2026-10-20.md)
 - [最近修改记录（2026-10-15）](最近修改记录-2026-10-15.md)
 
