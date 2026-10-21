@@ -91,6 +91,24 @@ Configuration rules:
 
 Without a configured model you can still open the workbench to browse the UI and existing data, but configuration is required before sending tasks.
 
+**File access policy** (optional, in `.mawoagent/settings.json`):
+
+```json
+{
+  "security": {
+    "workspace_only_reads": false,
+    "workspace_only_writes": true,
+    "protected_paths": [".mawoagent/settings.json", ".mcp.json"]
+  }
+}
+```
+
+Reads inside the workspace are always allowed. With the defaults above, reading outside the workspace is allowed, while writing outside it asks for confirmation; `dontAsk` and `plan` turn that request into a denial, and `acceptEdits` does not bypass it. A matching `permissions.allow` rule is the explicit way to widen the range for one tool or path.
+
+Resolution order is built-in defaults, then `~/.mawoagent/settings.json`, then the project file. The project layer only applies when its exact content is trusted; editing it invalidates that trust and drops the project layer until the project is trusted again. Paths are classified on their real form, so `..`, symbolic links and junctions cannot step outside the root while appearing local.
+
+This governs the built-in file tools only. `run_shell` runs with the user's own OS permissions and is not sandboxed by the policy.
+
 #### 3. Start the backend
 
 Open a terminal at the repository root:
@@ -552,6 +570,24 @@ MODEL=your-model-id
 - 修改 `.env` 后需重启服务。密钥保留在后端，不在前端页面录入或展示。
 
 暂未配置模型时，也可以打开工作台查看页面和已有数据；发送任务前需要完成配置。
+
+**文件访问策略**（可选，写在 `.mawoagent/settings.json`）：
+
+```json
+{
+  "security": {
+    "workspace_only_reads": false,
+    "workspace_only_writes": true,
+    "protected_paths": [".mawoagent/settings.json", ".mcp.json"]
+  }
+}
+```
+
+工作区内的读取始终允许。按上面的默认值，读取工作区之外放行，写入工作区之外则要求确认；`dontAsk` 与 `plan` 模式下该确认转为拒绝，`acceptEdits` 不会绕过它。要为某个工具或路径显式扩大范围，应添加对应的 `permissions.allow` 规则。
+
+解析顺序为：内置默认值、`~/.mawoagent/settings.json`、项目配置文件。项目层只在配置内容被精确信任时生效；修改该文件会使信任失效，项目层随之停用。路径按真实形态判定，`..`、符号链接与 junction 都无法在看起来本地的情况下越出根目录。
+
+该策略只约束内置文件工具。`run_shell` 以用户自身的系统权限运行，不受此策略沙箱限制。
 
 #### 3. 启动后端服务
 

@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
 
 from agents.agent import Agent
+from agents.workspace import WorkspaceContext
 from agents.main import _read_repl_input, run_repl
 from agents.online_skill_evolution import judge_retrieved_skill_usage
 from agents.skill_evolution import record_skill_usage_judgments
@@ -17,6 +18,11 @@ from agents.subagent import get_sub_agent_config
 
 
 def make_agent(**kwargs):
+    kwargs.setdefault(
+        # Temporary directories sit outside the workspace; these cases opt out
+        # of the range so the tool behaviour itself is what gets tested.
+        'workspace', WorkspaceContext(root=Path.cwd(), workspace_only_writes=False)
+    )
     with patch('agents.agent.build_system_prompt', return_value='test'):
         return Agent(api_base='http://example.test/v1', api_key='test',
                      enable_mcp=False, enable_memory_prefetch=False, enable_online_evolution=False, **kwargs)

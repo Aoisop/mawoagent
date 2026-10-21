@@ -16,6 +16,7 @@ from typing import Any, Callable, Literal
 
 from agents.memory import get_memory_dir
 from agents.tool_schemas import ToolDef, tool_definitions
+from agents.workspace import WorkspaceContext, current_workspace, resolve_tool_path
 
 ToolInput = dict[str, Any]
 SyncToolHandler = Callable[[ToolInput], str]
@@ -32,8 +33,12 @@ CONCURRENCY_SAFE_TOOLS = {"read_file", "list_files", "grep_search"}
 #----------------------工具调用----------------------------
 
 def _resolve_tool_path(raw_path: str) -> Path:
-    """Preserve the requested destination, including missing absolute paths."""
-    return Path(raw_path)
+    """Resolve against the workspace bound to the current tool call.
+
+    Without a bound workspace the historical behaviour is kept, so direct
+    callers and unit tests that never enter the runtime are unaffected.
+    """
+    return resolve_tool_path(raw_path)
 
 
 @dataclass(frozen=True)
@@ -623,11 +628,62 @@ def _check_permission_rules(tool_name: str, inp: dict) -> str | None:
     return None
 
 
+PATH_TOOLS = {"read_file", "write_file", "edit_file", "list_files", "grep_search"}
+WRITE_PATH_TOOLS = {"write_file", "edit_file"}
+
+
+def _confirm_outside_scope(mode: PermissionMode, message: str) -> dict:
+    """A path outside the granted range needs an explicit decision."""
+
+    if mode == "dontAsk":
+        return {"action": "deny", "message": f"Auto-denied (dontAsk mode): {message}"}
+    if mode == "plan":
+        return {"action": "deny", "message": f"Blocked in plan mode: {message}"}
+    return {"action": "confirm", "message": message}
+
+
+def _workspace_policy_check(
+    tool_name: str,
+    inp: dict,
+    mode: PermissionMode,
+    workspace: WorkspaceContext | None,
+) -> dict | None:
+    """Apply the workspace range before any blanket mode shortcut.
+
+    Only file tools are governed here. ``run_shell`` is untouched: the OS
+    reaches anything the user can, so the range below is an approval boundary
+    for the built-in file tools, not a sandbox.
+    """
+    if workspace is None or tool_name not in PATH_TOOLS:
+        return None
+
+    raw = inp.get("file_path") or inp.get("path") or "."
+    decision = workspace.classify(raw)
+    writes = tool_name in WRITE_PATH_TOOLS
+
+    if decision.scope == "outside":
+        target = f"{decision.display} (workspace root: {workspace.root})"
+        if writes and workspace.workspace_only_writes:
+            return _confirm_outside_scope(mode, f"write outside the workspace: {target}")
+        if not writes and workspace.workspace_only_reads:
+            return _confirm_outside_scope(mode, f"read outside the workspace: {target}")
+        return None
+
+    if writes and decision.protected:
+        return _confirm_outside_scope(mode, f"write to a policy file: {decision.display}")
+    if writes and decision.scope == "runtime_state":
+        return _confirm_outside_scope(
+            mode, f"write to the runtime state directory: {decision.display}"
+        )
+    return None
+
+
 def check_permission(
     tool_name: str,
     inp: dict,
     mode: PermissionMode = "default",
     plan_file_path: str | None = None,
+    workspace: WorkspaceContext | None = None,
 ) -> dict:
     """Returns {"action": "allow"|"deny"|"confirm", "message": ...}"""
     if mode == "bypassPermissions":
@@ -650,7 +706,14 @@ def check_permission(
             return {"action": "deny", "message": "Shell commands blocked in plan mode"}
 
     if rule_result == "allow":
+        # An explicit rule is how a user widens the range for one tool or path.
         return {"action": "allow"}
+
+    scope_result = _workspace_policy_check(
+        tool_name, inp, mode, workspace if workspace is not None else current_workspace()
+    )
+    if scope_result is not None:
+        return scope_result
 
     if tool_name in READ_TOOLS:
         return {"action": "allow"}

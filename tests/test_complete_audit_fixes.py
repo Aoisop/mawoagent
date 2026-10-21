@@ -16,6 +16,7 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 from agents.agent import Agent
+from agents.workspace import WorkspaceContext
 from agents.main import run_repl
 from agents import memory, online_skill_eval as ev, skill_candidates as candidates
 from agents import skill_evolution, skills, tools, project_trust, maintenance
@@ -27,7 +28,10 @@ from agents.validation import validate_json
 def make_agent(**kwargs):
     options = dict(api_base="http://example.test/v1", api_key="fake", custom_system_prompt="test",
                    enable_mcp=False, enable_memory_prefetch=False, enable_online_evolution=False,
-                   enable_folding=False, permission_mode="acceptEdits")
+                   enable_folding=False, permission_mode="acceptEdits",
+                   # These cases exercise other behaviour and write into temporary
+                   # directories, so they opt out of the workspace range here.
+                   workspace=WorkspaceContext(root=Path.cwd(), workspace_only_writes=False))
     options.update(kwargs)
     agent = Agent(**options)
     agent._auto_save = Mock()

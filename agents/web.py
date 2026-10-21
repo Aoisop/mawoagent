@@ -25,6 +25,7 @@ from .config import (
     resolve_api_config as _resolve_api_config,
     resolve_agent_options,
 )
+from .policy import load_security_policy
 from .session import list_sessions, load_session
 
 ASSETS = Path(__file__).resolve().parent.parent / "web"
@@ -333,7 +334,7 @@ class Conversation:
             return
         if not self.app.options.get("api_key"):
             raise WebError("尚未配置模型 API Key。请在项目 .env 中配置后重启 Web 服务。")
-        agent = WebAgent(self, permission_mode=self.mode, **self.app.options)
+        agent = WebAgent(self, permission_mode=self.mode, workspace=self.app.workspace, **self.app.options)
         if self.saved:
             try:
                 agent.restore_session(self.saved)
@@ -420,8 +421,11 @@ class WebApp:
         api_config = _resolve_api_config(None)
         self.options = options if options is not None else resolve_agent_options(api_config=api_config)
         self.project = Path.cwd().resolve()
+        self.policy = load_security_policy(self.project)
+        self.workspace = self.policy.workspace_context(self.project)
         self.config = {"project": self.project.name, "path": str(self.project), "model": self.options.get("model", "deepseek-chat"),
                        "protocol": self.options.get("api_protocol", "openai"), "configured": bool(self.options.get("api_key")),
+                       "security": self.policy.describe(),
                        "csrf": secrets.token_urlsafe(32)}
         self.auth = secrets.token_urlsafe(32)
         self.conversations = {}

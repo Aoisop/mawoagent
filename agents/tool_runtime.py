@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 from .tools import check_permission
 from .ui import print_tool_call
+from .workspace import workspace_scope
 
 
 class ToolExecution:
@@ -16,19 +17,22 @@ class ToolExecution:
         error = validate_json(inp, definition["input_schema"])
         if error:
             return f"Error: invalid arguments for {name}: {error}"
-        print_tool_call(name, inp)
-        permission = check_permission(name, inp, self.permission_mode, self._plan_file_path)
-        if permission["action"] == "deny":
-            return f"Action denied: {permission.get('message', '')}"
-        if permission["action"] == "confirm" and not await self._confirm_tool_call(name, permission):
-            return "User denied this action."
-        permission = check_permission(name, inp, self.permission_mode, self._plan_file_path)
-        if permission["action"] == "deny":
-            return f"Action denied: {permission.get('message', '')}"
-        try:
-            return await self._execute_tool_call(name, inp)
-        except asyncio.CancelledError:
-            raise
-        except Exception as exc:
-            return f"Error executing tool: {exc}"
 
+        # Bind the session workspace for the whole call so path resolution and
+        # the access policy agree on the same root, even for concurrent tools.
+        with workspace_scope(getattr(self, "workspace", None)):
+            print_tool_call(name, inp)
+            permission = check_permission(name, inp, self.permission_mode, self._plan_file_path)
+            if permission["action"] == "deny":
+                return f"Action denied: {permission.get('message', '')}"
+            if permission["action"] == "confirm" and not await self._confirm_tool_call(name, permission):
+                return "User denied this action."
+            permission = check_permission(name, inp, self.permission_mode, self._plan_file_path)
+            if permission["action"] == "deny":
+                return f"Action denied: {permission.get('message', '')}"
+            try:
+                return await self._execute_tool_call(name, inp)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                return f"Error executing tool: {exc}"

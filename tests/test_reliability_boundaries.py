@@ -18,6 +18,7 @@ from agents.agent import Agent
 from agents.memory import MemoryPrefetch, RelevantMemory
 from agents.mcp_client import McpConnection, McpToolError
 from agents import session
+from agents.workspace import WorkspaceContext
 
 
 def answer(protocol, text="done", tokens=1):
@@ -209,12 +210,14 @@ from types import SimpleNamespace as NS
 from unittest.mock import patch
 from agents.agent import Agent
 from agents import session
+from agents.workspace import WorkspaceContext
 root, protocol = Path(sys.argv[1]), sys.argv[2]
 session.SESSION_DIR = root / "sessions"
 async def main():
     agent = Agent(api_key="fake", api_base="https://example.test/v1", api_protocol=protocol,
                   custom_system_prompt="test", permission_mode="acceptEdits", enable_folding=False,
-                  enable_mcp=False, enable_memory_prefetch=False, enable_online_evolution=False)
+                  enable_mcp=False, enable_memory_prefetch=False, enable_online_evolution=False,
+                  workspace=WorkspaceContext(root=Path.cwd(), workspace_only_writes=False))
     agent.session_id = "crash-case"
     agent._augment_user_message_with_skill_context = lambda text: (text, None)
     calls = [(str(i), "write_file", {"file_path": str(root / (str(i)+".txt")), "content": "written once"}) for i in range(3)]
@@ -251,7 +254,8 @@ class CrashRecoveryTests(unittest.IsolatedAsyncioTestCase):
                                  ["completed", "running", "not_started"])
                 agent = Agent(api_key="fake", api_base="https://example.test/v1", api_protocol=protocol,
                               custom_system_prompt="test", enable_mcp=False, enable_memory_prefetch=False,
-                              enable_online_evolution=False, enable_folding=False)
+                              enable_online_evolution=False, enable_folding=False,
+                              workspace=WorkspaceContext(root=Path.cwd(), workspace_only_writes=False))
                 try:
                     agent.restore_session(stored)
                     messages = agent._openai_messages if agent.use_openai else agent._anthropic_messages

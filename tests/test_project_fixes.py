@@ -17,6 +17,7 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 from agents.agent import Agent
+from agents.workspace import WorkspaceContext
 from agents.main import _read_repl_input, _resolve_api_config, run_repl, run_one_shot
 from agents import session, skill_evolution
 from agents.mcp_client import McpConnection, McpManager
@@ -26,7 +27,10 @@ from agents.tools import _edit_file, execute_tool
 
 def make_agent(**kwargs):
     options = dict(api_base='http://example.test/v1', api_key='fake', custom_system_prompt='test',
-                   enable_mcp=False, enable_memory_prefetch=False, enable_online_evolution=False)
+                   enable_mcp=False, enable_memory_prefetch=False, enable_online_evolution=False,
+                   # Temporary directories are outside the workspace; these cases
+                   # opt out of the range so the write itself can be tested.
+                   workspace=WorkspaceContext(root=Path.cwd(), workspace_only_writes=False))
     options.update(kwargs)
     agent = Agent(**options)
     agent._auto_save = Mock()

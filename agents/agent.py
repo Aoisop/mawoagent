@@ -7,6 +7,7 @@ import logging
 import math
 import os
 import re
+import sys
 import time
 import uuid
 from pathlib import Path
@@ -16,6 +17,8 @@ import anthropic
 import openai
 
 from agents.mcp_client import BorrowedMcpManager, McpManager
+from agents.policy import load_security_policy
+from agents.workspace import WorkspaceContext
 from .background_jobs import BackgroundSkillTasks
 from .tool_runtime import ToolExecution
 from .context_runtime import ContextRuntime
@@ -175,7 +178,8 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
                  memory_recall_timeout: float=2.0,
                  enable_mcp: bool=True,
                  enable_online_evolution: bool=True,
-                 fold_observer: Callable[[dict[str, Any]], None] | None=None,):
+                 fold_observer: Callable[[dict[str, Any]], None] | None=None,
+                 workspace: WorkspaceContext | None=None,):
         if not 0 < auto_compact_threshold < 1:
             raise ValueError("auto_compact_threshold must be between 0 and 1")
         if max_fold_limit is not None and max_fold_limit < 0:
@@ -219,6 +223,7 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
         self.fold_observer = fold_observer
         available_tools = tool_definitions if custom_tools is None else custom_tools
         self.tools = [tool for tool in available_tools if enable_folding or tool["name"] != "compact_context"]
+        self.workspace = workspace if workspace is not None else load_security_policy().workspace_context()
         self.max_cost_usd = max_cost_usd
         self.max_turns = max_turns
         self.max_output_tokens = max_output_tokens
@@ -1399,6 +1404,7 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
             enable_memory_prefetch=self.enable_memory_prefetch,
             enable_mcp=self.enable_mcp,
             enable_online_evolution=self.enable_online_evolution,
+            workspace=self.workspace,
         )
         inherited_mcp_tools = {tool["name"] for tool in child_tools if tool["name"].startswith("mcp__")}
         if inherited_mcp_tools:
@@ -1916,6 +1922,10 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
         print_confirmation(command)
         if self.confirm_fn:
             return await self.confirm_fn(command)
+        # Without a confirmation channel (CI, headless runs, background jobs) a
+        # blocking input() would wait forever. An unanswered request is a denial.
+        if not sys.stdin or not sys.stdin.isatty():
+            return False
         # Fallback: blocking input
         try:
             answer = input("  Allow? (y/n): ")

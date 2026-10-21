@@ -38,6 +38,14 @@ class PermissionTests(unittest.TestCase):
         self.assertEqual(check_permission("edit_file", file, "acceptEdits")["action"], "allow")
         self.assertEqual(check_permission("run_shell", shell, "bypassPermissions")["action"], "allow")
 
+    def test_missing_confirmation_channel_denies_instead_of_blocking(self) -> None:
+        with patch("agents.agent.build_system_prompt", return_value="test system prompt"):
+            agent = Agent(api_base="http://example.test/v1", api_key="test")
+        with patch("agents.agent.sys.stdin") as stdin:
+            stdin.isatty.return_value = False
+            allowed = asyncio.run(agent._confirm_dangerous("write file: notes.txt"))
+        self.assertFalse(allowed)
+
     def test_shell_and_file_approvals_are_not_cached(self) -> None:
         with patch("agents.agent.build_system_prompt", return_value="test system prompt"):
             agent = Agent(api_base="http://example.test/v1", api_key="test")
