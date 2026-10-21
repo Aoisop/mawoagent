@@ -1,20 +1,13 @@
 version: 2
 
 updates:
-  # Runtime dependencies. requirements.lock is the file CI installs, so a bump
-  # here is only real once the lock file is regenerated with hashes.
-  - package-ecosystem: pip
-    directory: "/"
-    schedule:
-      interval: weekly
-      day: monday
-      time: "03:00"
-    open-pull-requests-limit: 5
-    commit-message:
-      prefix: "chore(deps)"
-    groups:
-      python-runtime:
-        patterns: ["*"]
+  # Runtime Python dependencies are hash-pinned in requirements.lock. Dependabot
+  # cannot recompute those hashes, so a pip PR here would only raise the lower
+  # bounds in requirements.txt and never change what CI actually installs.
+  # Vulnerability discovery is covered by the weekly pip-audit workflow instead.
+  # To move versions: run
+  #   pip-compile --generate-hashes --output-file requirements.lock requirements.txt
+  # and let the test workflow validate the result.
 
   # Workflow actions are pinned to commit SHAs; this keeps them current without
   # letting a moved tag silently change what runs with repository read access.
