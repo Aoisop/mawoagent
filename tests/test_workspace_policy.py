@@ -352,6 +352,44 @@ class PermissionScopeTests(unittest.TestCase):
         self.assertEqual(decision["action"], "confirm")
         self.assertNotIn("workspace", json.dumps(decision))
 
+    def test_instruction_bearing_files_are_protected(self) -> None:
+        # rules/ and the Skill/agent definitions are read into later prompts.
+        for name in (
+            ".mawoagent/rules/team.md",
+            ".mawoagent/skills/demo/SKILL.md",
+            ".mawoagent/agents/reviewer.md",
+        ):
+            with self.subTest(name=name):
+                decision = self.workspace.classify(name)
+                self.assertTrue(decision.protected, name)
+                self.assertEqual(decision.scope, "workspace")
+
+    def test_bypass_permissions_still_refuses_policy_file_writes(self) -> None:
+        # "Do not ask" must not become "may rewrite its own policy".
+        for name in (
+            ".mawoagent/settings.json",
+            ".mcp.json",
+            ".mawoagent/rules/team.md",
+            ".mawoagent/skills/demo/SKILL.md",
+            ".mawoagent/agents/reviewer.md",
+        ):
+            with self.subTest(name=name):
+                decision = check_permission(
+                    "write_file", {"file_path": name}, "bypassPermissions", None, self.workspace
+                )
+                self.assertEqual(decision["action"], "deny", name)
+                self.assertIn("bypasspermissions", decision["message"].lower())
+
+    def test_bypass_permissions_still_allows_ordinary_writes(self) -> None:
+        decision = check_permission(
+            "write_file", {"file_path": str(self.outside)}, "bypassPermissions", None, self.workspace
+        )
+        self.assertEqual(decision["action"], "allow")
+
+    def test_bypass_permissions_without_a_workspace_keeps_legacy_behaviour(self) -> None:
+        decision = check_permission("write_file", {"file_path": ".mcp.json"}, "bypassPermissions")
+        self.assertEqual(decision["action"], "allow")
+
 
 if __name__ == "__main__":
     unittest.main()

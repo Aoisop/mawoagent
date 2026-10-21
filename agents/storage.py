@@ -8,11 +8,28 @@ from pathlib import Path
 import stat
 import tempfile
 import threading
+import time
 
 
 _locks: dict[str, threading.RLock] = {}
 _locks_guard = threading.Lock()
 _held = threading.local()
+
+# Concurrent creators of the same sidecar can briefly see EACCES on Windows.
+# Retrying keeps the lock semantics unchanged while avoiding a spurious crash.
+_LOCK_OPEN_TIMEOUT_S = 5.0
+
+
+def _open_lock_file(path: Path):
+    target = path.with_name(path.name + ".lock")
+    deadline = time.monotonic() + _LOCK_OPEN_TIMEOUT_S
+    while True:
+        try:
+            return target.open("a+b")
+        except PermissionError:
+            if os.name != "nt" or time.monotonic() >= deadline:
+                raise
+            time.sleep(0.01)
 
 
 @contextmanager
@@ -34,7 +51,7 @@ def state_lock(path: Path):
             yield
             return
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.with_name(path.name + ".lock").open("a+b") as stream:
+        with _open_lock_file(path) as stream:
             if os.name == "nt":
                 import msvcrt
                 stream.seek(0)

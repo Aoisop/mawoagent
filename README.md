@@ -98,12 +98,20 @@ Without a configured model you can still open the workbench to browse the UI and
   "security": {
     "workspace_only_reads": false,
     "workspace_only_writes": true,
-    "protected_paths": [".mawoagent/settings.json", ".mcp.json"]
+    "protected_paths": [
+      ".mawoagent/settings.json",
+      ".mcp.json",
+      ".mawoagent/rules",
+      ".mawoagent/skills",
+      ".mawoagent/agents"
+    ]
   }
 }
 ```
 
 Reads inside the workspace are always allowed. With the defaults above, reading outside the workspace is allowed, while writing outside it asks for confirmation; `dontAsk` and `plan` turn that request into a denial, and `acceptEdits` does not bypass it. A matching `permissions.allow` rule is the explicit way to widen the range for one tool or path.
+
+`protected_paths` covers the files that define the policy itself and the files that are read into later prompts: the settings file, `.mcp.json`, `.mawoagent/rules/`, `.mawoagent/skills/` and `.mawoagent/agents/`. Writes there need confirmation, and `--yolo` (`bypassPermissions`) denies them outright — skipping confirmations must not let a session rewrite the rules that constrain it.
 
 Resolution order is built-in defaults, then `~/.mawoagent/settings.json`, then the project file. The project layer only applies when its exact content is trusted; editing it invalidates that trust and drops the project layer until the project is trusted again. Paths are classified on their real form, so `..`, symbolic links and junctions cannot step outside the root while appearing local.
 
@@ -261,7 +269,7 @@ mawoagent/
 ├── .mawoagent/
 │   ├── skills/                    # project-level Skills
 │   └── skill-evolution/           # Skill self-evolution audit artifacts
-├── data/                          # evaluation datasets (GAIA / HLE / ToolBench, etc.)
+├── data/                          # local benchmark data only, not distributed (docs/datasets.md)
 ├── docs/                          # web workbench, runtime reliability, and iteration strategy
 ├── tests/                         # Python regression tests
 ├── .github/                       # CI workflows
@@ -415,13 +423,13 @@ Sessions, Skill statistics, source indexes, and evaluation state use atomic repl
 
 ### Folded comparison evaluation
 
-Early self-run folded evaluation produced low numbers, so the `53.3%`, `20.2%`, and `44.7%` figures used in earlier explanatory material for GAIA / HLE metrics and memory-folding ablation **reuse results from the DeepAgent paper directly** (the paper PDF is not distributed with this repository) as quantitative references for the paper's method. The datasets and evaluation entry points are in the repository; run them yourself to see how mawoagent performs under your configuration.
+Early self-run folded evaluation produced low numbers, so the `53.3%`, `20.2%`, and `44.7%` figures used in earlier explanatory material for GAIA / HLE metrics and memory-folding ablation **reuse results from the DeepAgent paper directly** (the paper PDF is not distributed with this repository) as quantitative references for the paper's method. The evaluation entry points are in the repository; the benchmark datasets are not (see `docs/datasets.md`). Fetch them from their publishers and run the evaluation yourself to see how mawoagent performs under your configuration.
 
 Validate the cases first, then run the same cases with folding on and off. The run calls the model and saves per-case answers, scoring, traces before and after folding, and a summary.
 
 ```bash
-python -m agents.eval_folding --cases data/folding_eval_smoke.jsonl --output .mawoagent/folding-eval/smoke-001 --validate-only
-python -m agents.eval_folding --cases data/folding_eval_smoke.jsonl --output .mawoagent/folding-eval/smoke-001 --fold-after-turn 2
+python -m agents.eval_folding --cases tests/fixtures/folding_eval_smoke.jsonl --output .mawoagent/folding-eval/smoke-001 --validate-only
+python -m agents.eval_folding --cases tests/fixtures/folding_eval_smoke.jsonl --output .mawoagent/folding-eval/smoke-001 --fold-after-turn 2
 ```
 
 The evaluation entry point follows DeepAgent's three-way parallel memory generation (events, work, tools) and allows at most 3 folds per case by default; use `--fold-memory-mode single_json` and `--max-fold-limit N` for internal comparisons. `--fold-after-turn` is a fixed trigger added by mawoagent for short samples, not the paper's original trigger. The tool environment and grader still differ from the paper, so the resulting scores cannot be compared directly with the paper's tables.
@@ -592,12 +600,20 @@ MODEL=your-model-id
   "security": {
     "workspace_only_reads": false,
     "workspace_only_writes": true,
-    "protected_paths": [".mawoagent/settings.json", ".mcp.json"]
+    "protected_paths": [
+      ".mawoagent/settings.json",
+      ".mcp.json",
+      ".mawoagent/rules",
+      ".mawoagent/skills",
+      ".mawoagent/agents"
+    ]
   }
 }
 ```
 
 工作区内的读取始终允许。按上面的默认值，读取工作区之外放行，写入工作区之外则要求确认；`dontAsk` 与 `plan` 模式下该确认转为拒绝，`acceptEdits` 不会绕过它。要为某个工具或路径显式扩大范围，应添加对应的 `permissions.allow` 规则。
+
+`protected_paths` 覆盖两类文件：定义策略本身的文件，以及会被读进后续提示词的文件——设置文件、`.mcp.json`、`.mawoagent/rules/`、`.mawoagent/skills/`、`.mawoagent/agents/`。写入这些位置需要确认；`--yolo`（`bypassPermissions`）下则直接拒绝，因为"跳过确认"不能变成"允许会话改写约束自己的规则"。
 
 解析顺序为：内置默认值、`~/.mawoagent/settings.json`、项目配置文件。项目层只在配置内容被精确信任时生效；修改该文件会使信任失效，项目层随之停用。路径按真实形态判定，`..`、符号链接与 junction 都无法在看起来本地的情况下越出根目录。
 
@@ -755,7 +771,7 @@ mawoagent/
 ├── .mawoagent/
 │   ├── skills/                    # 项目级 Skills
 │   └── skill-evolution/           # Skills 自进化审计产物
-├── data/                          # 评测数据集（GAIA / HLE / ToolBench 等）
+├── data/                          # 仅本地评测数据，不随仓库分发（见 docs/datasets.md）
 ├── docs/                          # Web 工作台、运行可靠性与迭代方向说明
 ├── tests/                         # Python 回归测试
 ├── .github/                       # CI 工作流
@@ -909,13 +925,13 @@ Session、Skill 统计、来源索引和评测状态使用临时文件原子替�
 
 ### 折叠对照评测
 
-mawoagent 早期自行试跑折叠评测时，得到的数据偏低。因此，早期说明材料中用于说明 GAIA / HLE 指标和记忆折叠消融的 `53.3%`、`20.2%`、`44.7%` **直接复用 DeepAgent 论文的结果**（论文 PDF 未随仓库分发），用于展示论文方法的量化参照。数据集和评测入口都在仓库中，想了解 mawoagent 在自己配置下的表现，可以自行运行。
+mawoagent 早期自行试跑折叠评测时，得到的数据偏低。因此，早期说明材料中用于说明 GAIA / HLE 指标和记忆折叠消融的 `53.3%`、`20.2%`、`44.7%` **直接复用 DeepAgent 论文的结果**（论文 PDF 未随仓库分发），用于展示论文方法的量化参照。评测入口在仓库中，基准数据集不随仓库分发（见 `docs/datasets.md`），需要从各自发布方获取后运行，才能了解 mawoagent 在自己配置下的表现。
 
 先校验案例，再运行同题的折叠开启/关闭对照。运行命令会调用模型；结果会保存逐题答案、判分、折叠前后的轨迹和汇总。
 
 ```bash
-python -m agents.eval_folding --cases data/folding_eval_smoke.jsonl --output .mawoagent/folding-eval/smoke-001 --validate-only
-python -m agents.eval_folding --cases data/folding_eval_smoke.jsonl --output .mawoagent/folding-eval/smoke-001 --fold-after-turn 2
+python -m agents.eval_folding --cases tests/fixtures/folding_eval_smoke.jsonl --output .mawoagent/folding-eval/smoke-001 --validate-only
+python -m agents.eval_folding --cases tests/fixtures/folding_eval_smoke.jsonl --output .mawoagent/folding-eval/smoke-001 --fold-after-turn 2
 ```
 
 评测入口默认采用参考 DeepAgent 源码的三路并行记忆生成（事件、工作、工具）和每题最多 3 次折叠；可通过 `--fold-memory-mode single_json`、`--max-fold-limit N` 做本项目内部对照。`--fold-after-turn` 是 mawoagent 为短样例增加的固定触发，不是论文原始触发方式。此入口的工具环境与判分器仍不同于论文，生成的分数不能直接对标论文表格。

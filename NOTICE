@@ -3,8 +3,12 @@ Copyright (c) 2026 Aoisop
 
 mawoagent-specific additions and modifications are maintained by Aoisop.
 
-Third-party components keep their own authorship and terms:
-- data/*: third-party research artifacts
+Third-party components keep their own authorship and terms.
+
+Benchmark data is not distributed with this repository. The `data/` directory is
+listed in `.gitignore` and no longer tracked by Git. See `docs/datasets.md` for
+the upstream projects and how to obtain each set under its own terms; several of
+them are gated and cannot be mirrored here.
 
 Third-party skills and paper PDFs that were previously bundled are no longer
 distributed with this repository.

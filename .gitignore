@@ -235,3 +235,7 @@ analysis_progress.md
 # Local scratch and test artifacts
 tmp/
 test-output.txt
+
+# Third-party benchmark data. Fetched locally; never redistributed with the repo.
+# See docs/datasets.md for the upstream projects and how to obtain each set.
+data/

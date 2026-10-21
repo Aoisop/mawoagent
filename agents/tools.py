@@ -678,6 +678,36 @@ def _workspace_policy_check(
     return None
 
 
+def _policy_write_denied(
+    tool_name: str,
+    inp: dict,
+    workspace: WorkspaceContext | None,
+) -> dict | None:
+    """Deny edits to policy-defining files even when confirmations are skipped.
+
+    ``bypassPermissions`` means "do not ask", not "allow this session to rewrite
+    the rules that constrain it". Without this check the blanket shortcut would
+    silently disable the workspace boundary that governs the file tools.
+    """
+
+    if tool_name not in WRITE_PATH_TOOLS:
+        return None
+    active = workspace if workspace is not None else current_workspace()
+    if active is None:
+        return None
+    raw = inp.get("file_path") or inp.get("path") or "."
+    decision = active.classify(raw)
+    if not decision.protected:
+        return None
+    return {
+        "action": "deny",
+        "message": (
+            "Policy files are never auto-approved, even with bypassPermissions: "
+            f"{decision.display}"
+        ),
+    }
+
+
 def check_permission(
     tool_name: str,
     inp: dict,
@@ -687,6 +717,9 @@ def check_permission(
 ) -> dict:
     """Returns {"action": "allow"|"deny"|"confirm", "message": ...}"""
     if mode == "bypassPermissions":
+        denied = _policy_write_denied(tool_name, inp, workspace)
+        if denied is not None:
+            return denied
         return {"action": "allow"}
 
     rule_result = _check_permission_rules(tool_name, inp)

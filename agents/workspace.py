@@ -25,12 +25,18 @@ from typing import Iterator, Literal
 
 Scope = Literal["workspace", "runtime_state", "outside"]
 
-# Files that define the permissions themselves. Editing them through a generic
-# file tool would let a session rewrite its own policy, so writes need an
-# explicit confirmation even though they sit inside the workspace.
+# Files that define the permissions themselves, or that are loaded verbatim into
+# a later system prompt. Editing any of them through a generic file tool would
+# let a session widen its own policy or persist injected instructions across
+# every following session, so writes need an explicit confirmation even though
+# they sit inside the workspace.
 PROTECTED_RELATIVE_PATHS = (
     ".mawoagent/settings.json",
     ".mcp.json",
+    # Read into the system prompt, the Skill catalogue, or sub-agent prompts.
+    ".mawoagent/rules",
+    ".mawoagent/skills",
+    ".mawoagent/agents",
 )
 
 
@@ -174,13 +180,15 @@ class WorkspaceContext:
 
     def _is_protected(self, relative: str) -> bool:
         # str.lstrip("./") would eat the leading dot of ".mawoagent", so only a
-        # real "./" prefix is removed here.
+        # real "./" prefix is removed here. Paths stay "/"-separated: normcase
+        # would rewrite them to "\" on Windows and break the directory prefix.
         candidate = relative
         while candidate.startswith("./"):
             candidate = candidate[2:]
-        candidate = os.path.normcase(candidate)
+        if os.name == "nt":
+            candidate = candidate.casefold()
         for item in self.protected_paths:
-            key = os.path.normcase(item)
+            key = item.casefold() if os.name == "nt" else item
             if candidate == key or candidate.startswith(key + "/"):
                 return True
         return False
