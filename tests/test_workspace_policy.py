@@ -222,9 +222,22 @@ class PolicyResolutionTests(unittest.TestCase):
         self._write(self.home_path, {"security": {"protected_paths": ["secrets/"]}})
         policy = load_security_policy(self.project_path)
         context = policy.workspace_context(self.project_path)
-        self.assertEqual(context.root, self.project_path.resolve())
+        self.assertEqual(Path(context.root).resolve(), self.project_path.resolve())
         self.assertEqual(context.protected_paths, ("secrets",))
         self.assertEqual(context.source, "user")
+
+    def test_root_spelling_does_not_change_classification(self) -> None:
+        # The stored root keeps the spelling it was given; classification must
+        # not depend on it. Windows 8.3 short names and the macOS /var symlink
+        # both make an unresolved root differ from its resolved form.
+        alias = Path(self.home.name) / "root-alias"
+        if not (_make_junction(alias, self.project_path) or _make_symlink(alias, self.project_path)):
+            self.skipTest("alternate root spelling requires a junction or symlink")
+        aliased = WorkspaceContext(root=alias)
+        direct = WorkspaceContext(root=self.project_path.resolve())
+        self.assertEqual(aliased.root_real, direct.root_real)
+        self.assertEqual(aliased.classify("config.txt").scope, "workspace")
+        self.assertEqual(direct.classify("config.txt").scope, "workspace")
 
     def test_describe_reports_sources_without_secrets(self) -> None:
         self._write(

@@ -15,6 +15,7 @@ import os
 import re
 from pathlib import Path
 import secrets
+import sys
 import threading
 from urllib.parse import parse_qs, urlsplit
 
@@ -590,6 +591,23 @@ class WebApp:
 
 class WebServer(ThreadingHTTPServer):
     daemon_threads = True
+
+    def handle_error(self, request, client_address):
+        """Swallow the routine disconnect errors instead of printing them.
+
+        A browser that aborts a request leaves the handler writing to a closed
+        socket. Printing that traceback costs more than the information is
+        worth: the handler runs in a daemon thread, and a write to stderr while
+        the interpreter is finalising can abort the process with a fatal lock
+        error and a non-zero exit code. That turns a fully green test run red.
+
+        Unexpected errors keep the default behaviour.
+        """
+
+        error = sys.exc_info()[1]
+        if isinstance(error, (ConnectionError, BrokenPipeError, TimeoutError)):
+            return
+        super().handle_error(request, client_address)
 
     def __init__(self, address, app):
         self.app = app
