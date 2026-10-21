@@ -458,6 +458,19 @@ Coverage includes session increments, drafts and attachments, chat scrolling, Ma
 
 Coding-task fixtures with fixed initial states, allowed tools, budgets, and programmatic checks live in [tests/fixtures/tasks](tests/fixtures/tasks/README.md); `python -m unittest tests.test_task_fixtures` verifies that every fixture fails unsolved and passes against its reference solution.
 
+### Iteration plan and progress
+
+The roadmap is split into eight iterations (I0–I7) covering 21 tasks and six review-sized PRs. The first release is **I0–I2**: make a local code change reviewable before and recoverable after.
+
+| Iteration | Tasks | Delivered |
+| --- | --- | --- |
+| I0 Baseline and development environment | 2 | 2 |
+| I1 Access range and edit review | 3 | 2 |
+| I2 File snapshots and undo | 2 | 0 |
+| I3–I7 Code understanding, isolation, tools, learning, automation | 14 | 0 |
+
+Current status: **4 of 21 tasks**, PR-01 and PR-02 merged, I0 complete and I1 at two of three. The next step is T04, edit proposals with diff review in the CLI and the workbench. The [roadmap](docs/iteration-roadmap-2026-10-19.md) defines every task and its acceptance criteria; the [progress table](docs/iteration-progress.md) records what is delivered, what it was verified with, and which defects are still open.
+
 ### More documentation
 
 - [Web workbench: UI features, startup, and runtime boundaries](docs/web-workspace.md)
@@ -938,6 +951,19 @@ node --test web/tests/*.test.mjs
 测试覆盖会话增量、草稿与附件、聊天滚动、Markdown 排版，以及 Web 权限与 HTTP 访问边界。模型效果和 Skill 泛化能力需要另行评测。
 
 带固定初始状态、允许工具、预算和程序化检查的编码任务样本放在 [tests/fixtures/tasks](tests/fixtures/tasks/README.md)；执行 `python -m unittest tests.test_task_fixtures` 会校验每个样本在未解决时验收失败、套用参考解后验收通过。
+
+### 迭代计划与进度
+
+迭代计划分为八个迭代（I0–I7），共 21 个任务和 6 个按评审单元拆分的 PR。首版范围是 **I0–I2**：让本地代码修改在动手前可审阅、改动后可恢复。
+
+| 迭代 | 任务数 | 已交付 |
+| --- | --- | --- |
+| I0 基线与开发环境 | 2 | 2 |
+| I1 访问范围与修改审阅 | 3 | 2 |
+| I2 文件快照与撤销 | 2 | 0 |
+| I3–I7 代码理解、隔离执行、工具、学习、自动化 | 14 | 0 |
+
+当前进度：**21 个任务已完成 4 个**，PR-01 与 PR-02 已合并，I0 全部完成，I1 完成三分之二。下一步是 T04——命令行与工作台的编辑提案及 diff 审阅。[计划表](docs/iteration-roadmap-2026-10-19.md)定义每个任务及其验收标准，[进度表](docs/iteration-progress.md)记录已交付内容、对应的验证证据，以及尚未闭合的缺陷。
 
 ### 更多文档
 
