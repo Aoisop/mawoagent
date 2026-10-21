@@ -1,0 +1,27 @@
+name: Dependency audit
+
+# Advisory checks are deliberately separate from the test workflow: a newly
+# published advisory should not turn an unrelated pull request red. This runs
+# weekly and on demand, and fails loudly when a locked package has a known
+# vulnerability.
+
+on:
+  schedule:
+    - cron: "0 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install --disable-pip-version-check pip-audit
+      - name: Audit locked packages
+        run: python -m pip_audit -r requirements.lock --strict

@@ -25,8 +25,11 @@ RUN mkdir -p /etc/apt/keyrings \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*
 
+# Keep in step with @playwright/mcp in .mcp.json. That package pins
+# playwright 1.64.0-alpha-1790635538000, so the browser build must match it;
+# `@latest` would install a different browser revision than the MCP server uses.
 RUN apt-get update \
-    && npx -y playwright@latest install --with-deps chromium \
+    && npx -y playwright@1.64.0-alpha-1790635538000 install --with-deps chromium \
     && npm cache clean --force \
     && rm -rf /var/lib/apt/lists/*
 

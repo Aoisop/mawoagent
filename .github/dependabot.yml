@@ -1,0 +1,32 @@
+version: 2
+
+updates:
+  # Runtime dependencies. requirements.lock is the file CI installs, so a bump
+  # here is only real once the lock file is regenerated with hashes.
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:00"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+    groups:
+      python-runtime:
+        patterns: ["*"]
+
+  # Workflow actions are pinned to commit SHAs; this keeps them current without
+  # letting a moved tag silently change what runs with repository read access.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "03:00"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns: ["*"]
