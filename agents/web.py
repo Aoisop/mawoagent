@@ -506,8 +506,28 @@ class WebApp:
         action = parts[3] if len(parts) == 4 else ""
         if method == "GET" and not action:
             return view.snapshot
+        if method == "GET" and action == "diff":
+            from .snapshots import build_diff, describe_turn, latest_turn
+            turn = latest_turn(view.id, self.workspace.root)
+            if turn is None:
+                return {"turn": None, "summary": "该会话还没有记录任何轮次。", "diff": ""}
+            return {
+                "turn": turn.index,
+                "status": turn.status,
+                "summary": describe_turn(turn),
+                "diff": build_diff(turn),
+            }
         if method != "POST":
             raise WebError("不支持的请求。", 405)
+        if action == "undo":
+            from .snapshots import latest_turn, undo_turn
+            offset = body.get("n", 1)
+            if type(offset) is not int or offset < 1:
+                raise WebError("无效的轮次序号。")
+            turn = latest_turn(view.id, self.workspace.root, offset - 1)
+            if turn is None:
+                raise WebError("找不到可撤销的轮次。", 404)
+            return undo_turn(turn, self.workspace.root)
         if action == "chat":
             message = body.get("message")
             if not isinstance(message, str) or not message.strip() or len(message) > 100000:

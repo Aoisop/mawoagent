@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Callable, Literal
 
 from agents.memory import get_memory_dir
+from agents.snapshots import record_before_change
 from agents.tool_schemas import ToolDef, tool_definitions
 from agents.workspace import WorkspaceContext, current_workspace, resolve_tool_path
 
@@ -136,6 +137,9 @@ def _read_file(inp: ToolInput) -> str:
 
 def _replace_file(path: Path, content: str, expected_version=_UNTRACKED) -> FileVersion:
     """Stage content, then verify the observed version immediately before commit."""
+    # Keep the pre-image before anything touches the file, so a turn can be
+    # diffed and undone afterwards even if the write itself fails.
+    record_before_change(path)
     current = _file_version(path)
     if expected_version is _UNTRACKED:
         expected_version = current

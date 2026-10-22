@@ -18,6 +18,7 @@ import openai
 
 from agents.mcp_client import BorrowedMcpManager, McpManager
 from agents.policy import load_security_policy
+from agents.snapshots import begin_turn, finish_turn
 from agents.workspace import WorkspaceContext
 from .background_jobs import BackgroundSkillTasks
 from .tool_runtime import ToolExecution
@@ -489,6 +490,10 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
         self._aborted = False
         self.last_finish_reason = None
         self._turn_output_buffer = []
+        # Bound before the task is created so every tool call inherits it.
+        recorder, snapshot_token = begin_turn(
+            self.session_id, self.workspace.root, enabled=not self.is_sub_agent
+        )
         self._current_task = asyncio.create_task(self._chat_turn(user_message))
         try:
             await self._current_task
@@ -500,6 +505,11 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
             if not user_abort:
                 raise
         finally:
+            finish_turn(
+                recorder,
+                snapshot_token,
+                status="interrupted" if self._aborted else "complete",
+            )
             self._repair_interrupted_tool_calls()
             self._current_task = None
             self._turn_output_buffer = None

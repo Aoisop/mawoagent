@@ -134,6 +134,22 @@ async def _read_repl_input(prompt: str = "") -> str:
     return value
 
 
+def _turn_offset(parts: list[str]) -> int | None:
+    """Translate a 1-based turn number into a skip count from the newest turn."""
+
+    if not parts:
+        return 0
+    if len(parts) > 1:
+        return None
+    try:
+        number = int(parts[0])
+    except ValueError:
+        return None
+    if number < 1:
+        return None
+    return number - 1
+
+
 async def run_repl(agent: Agent) -> None:
     previous_handler = signal.getsignal(signal.SIGINT)
     try:
@@ -245,6 +261,52 @@ async def _run_repl(agent: Agent) -> None:
             continue
         if inp == "/plan":
             agent.toggle_plan_mode()
+            continue
+        if inp.startswith("/diff"):
+            from .snapshots import build_diff, describe_turn, latest_turn
+            parts = inp.split()[1:]
+            skip = _turn_offset(parts)
+            if skip is None:
+                print_error("Usage: /diff [n] — n counts back from the latest turn.")
+                continue
+            turn = latest_turn(agent.session_id, agent.workspace.root, skip)
+            if turn is None:
+                print_info("No recorded turns for this session yet.")
+                continue
+            print_info(describe_turn(turn))
+            diff = build_diff(turn)
+            print(diff if diff.strip() else "No text changes to show.")
+            continue
+        if inp.startswith("/undo"):
+            from .snapshots import describe_turn, latest_turn, undo_turn
+            parts = inp.split()[1:]
+            dry_run = "--dry-run" in parts
+            skip = _turn_offset([part for part in parts if part != "--dry-run"])
+            if skip is None:
+                print_error("Usage: /undo [n] [--dry-run]")
+                continue
+            turn = latest_turn(agent.session_id, agent.workspace.root, skip)
+            if turn is None:
+                print_info("No recorded turns for this session yet.")
+                continue
+            print_info(describe_turn(turn))
+            if dry_run:
+                print_info("Dry run: nothing restored. Run /undo without --dry-run to apply.")
+                continue
+            result = undo_turn(turn, agent.workspace.root)
+            if result["restored"]:
+                print_info("Restored: " + ", ".join(result["restored"]))
+            if result["removed"]:
+                print_info("Removed (created during the turn): " + ", ".join(result["removed"]))
+            if result["conflicts"]:
+                print_warning(
+                    "Skipped because the file changed after this turn: " + ", ".join(result["conflicts"])
+                )
+            if result["skipped"]:
+                for item in result["skipped"]:
+                    print_warning("Skipped: " + item)
+            if not any(result[key] for key in ("restored", "removed", "conflicts", "skipped")):
+                print_info("Nothing to undo.")
             continue
         if inp == "/cost":
             agent.show_cost()
@@ -484,6 +546,8 @@ REPL commands:
   /plan               Toggle plan mode (read-only <-> normal)
   /cost               Show token usage and cost
   /compact            Manually compact conversation
+  /diff [n]           Show what the n-th latest turn changed
+  /undo [n]           Revert the n-th latest turn (--dry-run to preview)
   /memory             List saved memories
   /skills             List available skills
   /skill-stats        Show skill usage and evolution stats
