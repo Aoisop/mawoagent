@@ -27,6 +27,7 @@ import hashlib
 import importlib.util
 import json
 import shutil
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -71,12 +72,20 @@ def _digest(path: Path) -> str:
 
 
 def file_digests(root: Path) -> dict[str, str]:
-    """Return ``{relative posix path: sha256}`` for every file under *root*."""
+    """Return ``{relative posix path: sha256}`` for every file under *root*.
+
+    Bytecode caches are skipped: they are generated, untracked, and importing a
+    checker or a workspace module next to the fixture would otherwise show up as
+    an "unexpected extra file" and break the pinned initial state.
+    """
 
     digests: dict[str, str] = {}
     for path in sorted(root.rglob("*")):
-        if path.is_file():
-            digests[path.relative_to(root).as_posix()] = _digest(path)
+        if not path.is_file():
+            continue
+        if "__pycache__" in path.parts or path.suffix == ".pyc":
+            continue
+        digests[path.relative_to(root).as_posix()] = _digest(path)
     return digests
 
 
@@ -148,7 +157,13 @@ def _load_check_module(task: dict[str, Any]):
     if spec is None or spec.loader is None:
         raise ImportError(f"cannot load {path}")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Loading a checker must not leave __pycache__ inside the fixture tree.
+    previous = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    try:
+        spec.loader.exec_module(module)
+    finally:
+        sys.dont_write_bytecode = previous
     return module
 
 
