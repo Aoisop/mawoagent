@@ -203,6 +203,8 @@ In interactive mode you can type tasks directly or use commands such as `/plan`,
 
 Every user turn is snapshotted: the first time a file changes, its previous content is kept under `.mawoagent/snapshots`. `/diff` shows what the latest turn changed, `/undo` reverts it, and `/undo 2` reaches one turn further back. Files edited by hand after the turn are reported as conflicts and left alone. The same two operations are available over the web API at `GET /api/sessions/<id>/diff` and `POST /api/sessions/<id>/undo`.
 
+A write or an edit is shown as a unified diff before it runs, bound to the exact file version it was built from. If the file changes while you are deciding, nothing is written and the change has to be repeated against the new content.
+
 ### Core capabilities
 
 - **Web workbench**: chat, streaming replies, tool authorization, task details, Skills, evaluation, memory, and settings, all sharing the local Runtime.
@@ -476,11 +478,11 @@ The roadmap is split into eight iterations (I0–I7) covering 21 tasks and six r
 | Iteration | Tasks | Delivered |
 | --- | --- | --- |
 | I0 Baseline and development environment | 2 | 2 |
-| I1 Access range and edit review | 3 | 2 |
+| I1 Access range and edit review | 3 | 3 |
 | I2 File snapshots and undo | 2 | 2 |
 | I3–I7 Code understanding, isolation, tools, learning, automation | 14 | 0 |
 
-Current status: **6 of 21 tasks**, PR-01, PR-02 and PR-04 merged, I0 and I2 complete and I1 at two of three. The next step is T04, edit proposals with diff review in the CLI and the workbench. The [roadmap](docs/iteration-roadmap-2026-10-19.md) defines every task and its acceptance criteria; the [progress table](docs/iteration-progress.md) records what is delivered, what it was verified with, and which defects are still open.
+Current status: **7 of 21 tasks**: the first release, I0–I2, is complete. I3 (Repo Map, symbol search, Skill YAML) is the next iteration. The [roadmap](docs/iteration-roadmap-2026-10-19.md) defines every task and its acceptance criteria; the [progress table](docs/iteration-progress.md) records what is delivered, what it was verified with, and which defects are still open.
 
 ### More documentation
 
@@ -707,6 +709,8 @@ python -m agents.main --help
 进入交互模式后，可以直接输入任务，也可使用 `/plan`、`/skills`、`/memory`、`/compact` 等命令。
 
 每一轮对话都会留快照：某次修改发生前的内容会存到 `.mawoagent/snapshots`。`/diff` 查看最近一轮改了什么，`/undo` 撤销它，`/undo 2` 再往前一轮。若文件在该轮之后被手工改过，撤销会将其列为冲突并跳过。同样两个操作也提供 Web 接口：`GET /api/sessions/<id>/diff` 与 `POST /api/sessions/<id>/undo`。
+
+写入或编辑在执行前会以 unified diff 呈现，并绑定提案所依据的文件版本。若在你审阅期间文件发生变化，则不会写入，需要基于新内容重新发起。
 
 ### 核心能力
 
@@ -981,11 +985,11 @@ node --test web/tests/*.test.mjs
 | 迭代 | 任务数 | 已交付 |
 | --- | --- | --- |
 | I0 基线与开发环境 | 2 | 2 |
-| I1 访问范围与修改审阅 | 3 | 2 |
+| I1 访问范围与修改审阅 | 3 | 3 |
 | I2 文件快照与撤销 | 2 | 2 |
 | I3–I7 代码理解、隔离执行、工具、学习、自动化 | 14 | 0 |
 
-当前进度：**21 个任务已完成 6 个**，PR-01、PR-02 与 PR-04 已合并，I0 与 I2 全部完成，I1 完成三分之二。下一步是 T04——命令行与工作台的编辑提案及 diff 审阅。[计划表](docs/iteration-roadmap-2026-10-19.md)定义每个任务及其验收标准，[进度表](docs/iteration-progress.md)记录已交付内容、对应的验证证据，以及尚未闭合的缺陷。
+当前进度：**21 个任务已完成 7 个**，首版范围 I0–I2 全部完成。下一轮是 I3：Repo Map、符号搜索与 Skill YAML。[计划表](docs/iteration-roadmap-2026-10-19.md)定义每个任务及其验收标准，[进度表](docs/iteration-progress.md)记录已交付内容、对应的验证证据，以及尚未闭合的缺陷。
 
 ### 更多文档
 

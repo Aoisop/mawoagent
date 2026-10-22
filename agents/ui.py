@@ -163,9 +163,12 @@ def print_error(msg: str) -> None:
 
 
 def print_confirmation(command: str) -> None:
+    # File changes now arrive with a diff attached, so the generic "dangerous
+    # command" heading would misdescribe what the user is being asked to review.
+    editing = command.startswith(("edit file:", "write file:"))
     _safe_print(Panel(
         _safe_text(command),
-        title="[bold yellow]Dangerous command[/bold yellow]",
+        title="[bold yellow]Review change[/bold yellow]" if editing else "[bold yellow]Dangerous command[/bold yellow]",
         border_style="yellow",
         box=box.ROUNDED,
         padding=(0, 1),

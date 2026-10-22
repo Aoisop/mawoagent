@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import difflib
 import fnmatch
 import hashlib
 import json
@@ -251,32 +252,120 @@ def _generate_diff(old_content: str, old_string: str, new_string: str) -> str:
     return "\n".join(parts)
 
 #编辑文件
+def _proposed_edit(path: Path, inp: ToolInput) -> tuple[str, str, str]:
+    """Return the content before, the content after, and a quote-normalization note."""
+
+    content = path.read_text(encoding="utf-8", errors="replace")
+    actual = _find_actual_string(content, inp["old_string"])
+    if not actual:
+        raise ValueError(f"old_string not found in {inp['file_path']}")
+
+    # Normalized matches must be unique in the same representation used to
+    # find them, including mixed straight/curly quote spellings.
+    occurrences = (content.count(actual) if actual == inp["old_string"] else
+                   _normalize_quotes(content).count(_normalize_quotes(inp["old_string"])))
+    if occurrences > 1:
+        raise ValueError(
+            f"old_string found {occurrences} times in {inp['file_path']}. Must be unique."
+        )
+
+    note = " (matched via quote normalization)" if actual != inp["old_string"] else ""
+    return content, content.replace(actual, inp["new_string"], 1), note
+
+
+@dataclass(frozen=True)
+class EditProposal:
+    """What a write will do, bound to the exact file version it was built from."""
+
+    tool: str
+    display_path: str
+    path: Path
+    before: str
+    after: str
+    note: str
+    base_version: FileVersion | None
+    existed: bool
+
+    @property
+    def fingerprint(self) -> str:
+        parts = [self.display_path, str(self.base_version), self.after]
+        return hashlib.sha256("\x00".join(parts).encode()).hexdigest()[:10]
+
+    def is_current(self) -> bool:
+        """True when the file still holds the version this proposal was built on."""
+
+        try:
+            return _file_version(self.path) == self.base_version
+        except OSError:
+            return False
+
+    def diff(self, limit: int = 120) -> str:
+        old = self.before.splitlines(keepends=True)
+        new = self.after.splitlines(keepends=True)
+        label = self.display_path
+        lines = list(difflib.unified_diff(
+            old,
+            new,
+            fromfile=f"a/{label}" if self.existed else "/dev/null",
+            tofile=f"b/{label}",
+            lineterm="\n",
+        ))
+        if len(lines) > limit:
+            lines = lines[:limit] + [f"... diff truncated ({len(lines) - limit} more lines)\n"]
+        return "".join(lines)
+
+    def render(self) -> str:
+        header = f"{'edit' if self.tool == 'edit_file' else 'write'} file: {self.display_path}"
+        state = "new file" if not self.existed else f"base {self.fingerprint}"
+        extra = f"\n{self.note}" if self.note else ""
+        return f"{header} ({state}){extra}\n{self.diff()}"
+
+
+def build_edit_proposal(tool_name: str, inp: ToolInput) -> EditProposal:
+    """Compute the exact change before asking the user to approve it."""
+
+    path = _resolve_tool_path(inp["file_path"]).resolve()
+    version = _file_version(path)
+
+    if tool_name == "write_file":
+        try:
+            before = path.read_text(encoding="utf-8", errors="replace") if path.is_file() else ""
+            after = inp["content"]
+            note = ""
+        except OSError as exc:
+            raise ValueError(f"cannot read {inp['file_path']}: {exc}") from exc
+    elif tool_name == "edit_file":
+        if version is None:
+            raise ValueError(f"cannot edit {inp['file_path']}: the file does not exist")
+        try:
+            before, after, note = _proposed_edit(path, inp)
+        except OSError as exc:
+            raise ValueError(f"cannot read {inp['file_path']}: {exc}") from exc
+    else:
+        raise ValueError(f"{tool_name} does not produce an edit proposal")
+
+    return EditProposal(
+        tool=tool_name,
+        display_path=str(inp.get("file_path", "")),
+        path=path,
+        before=before,
+        after=after,
+        note=note,
+        base_version=version,
+        existed=version is not None,
+    )
+
+
 def _edit_file(inp: ToolInput, expected_version=_UNTRACKED) -> str:
     try:
         path = _resolve_tool_path(inp["file_path"]).resolve()
         if expected_version is _UNTRACKED:
             expected_version = _file_version(path)
-        content = path.read_text(encoding="utf-8", errors="replace")
 
-        actual = _find_actual_string(content, inp["old_string"])
-        if not actual:
-            return f"Error: old_string not found in {inp['file_path']}"
-
-        # Normalized matches must be unique in the same representation used to
-        # find them, including mixed straight/curly quote spellings.
-        occurrences = (content.count(actual) if actual == inp["old_string"] else
-                       _normalize_quotes(content).count(_normalize_quotes(inp["old_string"])))
-        if occurrences > 1:
-            return f"Error: old_string found {occurrences} times in {inp['file_path']}. Must be unique."
-
-        new_content = content.replace(actual, inp["new_string"], 1)
+        content, new_content, note = _proposed_edit(path, inp)
         version = _replace_file(path, new_content, expected_version)
-
-        diff = _generate_diff(content, actual, inp["new_string"])
-
-        quote_note = " (matched via quote normalization)" if actual != inp["old_string"] else ""
-
-        return _FileResult(f"Successfully edited {inp['file_path']}{quote_note}\n\n{diff}", path, version)
+        diff = _generate_diff(content, inp["old_string"], inp["new_string"])
+        return _FileResult(f"Successfully edited {inp['file_path']}{note}\n\n{diff}", path, version)
     except Exception as e:
         return f"Error editing file: {e}"
 

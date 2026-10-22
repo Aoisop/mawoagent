@@ -9,19 +9,19 @@
 | 指标 | 数值 |
 | --- | --- |
 | 计划任务 | 21（T01–T21） |
-| 已交付 | 6（T01、T02、T03、T05、T06、T07） |
+| 已交付 | 7（T01、T02、T03、T05、T06、T07、T04） |
 | 进行中 | 0 |
-| 未开始 | 15 |
-| 迭代完成 | 2 / 8（I0、I2） |
-| 首版范围 I0–I2 | 6 / 7 任务 |
-| PR 完成 | 3 / 6（PR-01、PR-02、PR-04） |
+| 未开始 | 14 |
+| 迭代完成 | 3 / 8（I0、I1、I2） |
+| 首版范围 I0–I2 | 7 / 7 任务（完成） |
+| PR 完成 | 4 / 6（PR-01、PR-02、PR-03、PR-04） |
 
 ## 迭代进度
 
 | 迭代 | 优先级 | 任务数 | 已交付 | 状态 |
 | --- | --- | --- | --- | --- |
 | I0 基线与开发环境 | P0 | 2 | 2 | ✅ 完成 |
-| I1 访问范围与修改审阅 | P0 | 3 | 2 | 🚧 进行中（缺 T04） |
+| I1 访问范围与修改审阅 | P0 | 3 | 3 | ✅ 完成 |
 | I2 文件快照与撤销 | P0 | 2 | 2 | ✅ 完成 |
 | I3 代码理解与任务对照 | P1 | 3 | 0 | 未开始 |
 | I4 隔离执行 | P1 | 2 | 0 | 未开始 |
@@ -36,7 +36,7 @@
 | T01 环境与启动流程 | I0 | ✅ | `README.md`、`docs/t01-environment-baseline-2026-10-20.md` | `6f4034d`；依赖与 `requirements.lock` 双向差集为空；`pip check` 无冲突 |
 | T02 任务 fixture 与验收脚本 | I0 | ✅ | `tests/fixtures/tasks/`、`tests/fixture_harness.py` | `26da0d1`；5 个任务，原样必须失败、参考解必须通过；17 个用例 |
 | T03 工作区实例与访问策略 | I1 | ✅ | `agents/workspace.py`、`agents/tools.py`、`agents/tool_runtime.py` | `259641e`；`..`／绝对路径／symlink／junction／UNC／跨盘符均有覆盖；状态目录与策略文件单独处理 |
-| T04 编辑提案与 diff 审阅 | I1 | ⬜ 未开始 | `agents/tools.py`、`agents/web.py`、`agents/ui.py`、`web/app.js` | 待实现：批准绑定准确版本、失效提案重新生成、先支持批准/拒绝 |
+| T04 编辑提案与 diff 审阅 | I1 | ✅ | `agents/tools.py`、`agents/tool_runtime.py`、`agents/ui.py`、`agents/web.py` | 执行前生成 unified diff 并绑定文件版本指纹；批准后复查版本，期间文件变化则整体不写；拒绝不落盘；同意卡片沿用现有审批 UI，diff 以等宽文本滚动显示 |
 | T05 策略配置与来源展示 | I1 | ✅ | `agents/policy.py`、`agents/web.py` | `259641e`；复用 `settings.json`；来源逐项记录；未信任项目层被忽略；密钥脱敏 |
 | T06 轮次快照与恢复 | I2 | ✅ | `agents/snapshots.py`、`agents/tools.py`、`agents/agent.py` | 每轮首次改动前留底；排除 `.mawoagent`/`.git`/依赖目录、超限文件与二进制；保留最近 30 轮并受总容量约束；进程中断的轮次标记为 `interrupted` |
 | T07 `/diff`、`/undo` | I2 | ✅ | `agents/main.py`、`agents/web.py` | CLI 支持 `/diff [n]`、`/undo [n] [--dry-run]`；Web 提供 `GET …/diff` 与 `POST …/undo`；撤销前逐文件比对，轮次后被改动的文件列为冲突并跳过 |
@@ -61,16 +61,16 @@
 | --- | --- | --- |
 | PR-01 | T01–T02：环境、测试基线、5 个任务 fixture | ✅ 已合并 |
 | PR-02 | T03、T05：WorkspaceContext、访问范围、策略配置 | ✅ 已合并 |
-| PR-03 | T04：编辑提案与 Web/CLI diff 审阅 | ⬜ 依赖已满足，可开始 |
+| PR-03 | T04：编辑提案与 Web/CLI diff 审阅 | ✅ 已合并 |
 | PR-04 | T06–T07：轮次快照、diff/undo | ✅ 已合并（T04 仍待补） |
 | PR-05 | T08–T09：Repo Map 与任务对照 | ⬜ 依赖 PR-04 |
 | PR-06 | T10：Skill YAML | ⬜ 可独立提前 |
 
 ## 下一步
 
-**T04 是首版唯一剩下的任务**：它补齐 I1 的编辑前审阅，此后 I0–I2 才算完整。
+**首版 I0–I2 已全部交付。** 下一轮是 I3：T08 Repo Map 与符号搜索、T09 任务对照、T10 Skill YAML 修复；其中 T10 可独立先做。
 
-T07 的 Web 端目前只有接口，界面入口尚未接入；补齐它属于 T04 的同一批前端改动。I3 的 T08–T09 依赖 PR-04，现在可以开始。
+仍未闭合的两处界面/接口落差：T07 的 Web 端只有接口、没有按钮；授权卡片里的 diff 是纯文本，没有按增删着色。
 
 ## 已知缺陷与风险
 
@@ -85,7 +85,7 @@ T07 的 Web 端目前只有接口，界面入口尚未接入；补齐它属于 T
 
 | 口径 | 结果 |
 | --- | --- |
-| 完整套件 | 296 个用例，`OK (skipped=8)`，约 240 秒 |
+| 完整套件 | 310 个用例，`OK (skipped=8)`，约 240 秒 |
 | CI 矩阵 | 3 个平台 × Python 3.11/3.12 加前端作业，最近一次（run #21）全部通过 |
 | 前端 | `node --check web/app.js` 通过；30 个单测通过 |
 | 跳过原因 | 2 个符号链接用例（Windows 需开发者模式）；其余为既有平台条件跳过 |
