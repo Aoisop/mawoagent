@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import io
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -362,7 +364,8 @@ class ChatIntegrationTests(unittest.IsolatedAsyncioTestCase):
                 side_effect=[self._tool_response(target), self._final_response()]
             )
 
-            await agent.chat("create the file")
+            with redirect_stdout(io.StringIO()):
+                await agent.chat("create the file")
 
             self.assertEqual(target.read_text(encoding="utf-8"), "after\n")
             turn = latest_turn(agent.session_id, root)
