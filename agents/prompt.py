@@ -240,4 +240,13 @@ def build_system_prompt() -> str:
     result = SYSTEM_PROMPT_TEMPLATE
     for key, value in replacements.items():
         result = result.replace(key, value)
+
+    # Optional outline of the workspace; empty when disabled or unavailable.
+    try:
+        from .repo_index import build_repo_map_section
+        repo_map = build_repo_map_section()
+    except (OSError, ValueError):
+        repo_map = ""
+    if repo_map:
+        result = result.rstrip() + "\n\n" + repo_map + "\n"
     return result

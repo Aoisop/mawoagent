@@ -262,6 +262,17 @@ async def _run_repl(agent: Agent) -> None:
         if inp == "/plan":
             agent.toggle_plan_mode()
             continue
+        if inp.startswith("/symbols"):
+            from .repo_index import format_search, format_stats, refresh_index
+            parts = inp.split(maxsplit=1)
+            index = refresh_index(agent.workspace.root)
+            if len(parts) == 1:
+                print_info(format_stats(index))
+                outline = index.map_text(4000)
+                print(outline if outline.strip() else "No symbols found in this workspace.")
+            else:
+                print_info(format_search(index.search(parts[1], limit=40)))
+            continue
         if inp.startswith("/diff"):
             from .snapshots import build_diff, describe_turn, latest_turn
             parts = inp.split()[1:]
@@ -546,6 +557,7 @@ REPL commands:
   /plan               Toggle plan mode (read-only <-> normal)
   /cost               Show token usage and cost
   /compact            Manually compact conversation
+  /symbols [query]    Outline the workspace symbols, or search them
   /diff [n]           Show what the n-th latest turn changed
   /undo [n]           Revert the n-th latest turn (--dry-run to preview)
   /memory             List saved memories

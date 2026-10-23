@@ -197,6 +197,7 @@ cython_debug/
 .teams/
 .mawoagent/skill-evolution/
 .mawoagent/folding-eval/
+.mawoagent/repo-index.json
 .mawoagent/snapshots/
 .mawoagent/sessions/*.folded-memory.jsonl
 .mawoagent/sessions/*.folded-memory.latest.json

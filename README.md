@@ -205,6 +205,8 @@ Every user turn is snapshotted: the first time a file changes, its previous cont
 
 A write or an edit is shown as a unified diff before it runs, bound to the exact file version it was built from. If the file changes while you are deciding, nothing is written and the change has to be repeated against the new content.
 
+`/symbols` outlines the workspace and `/symbols <query>` searches it. The same index feeds a short repository map in the system prompt, capped by `context.repo_map_budget`. Set `"context": {"repo_map": false}` in `settings.json`, or `MAWOAGENT_REPO_MAP=off`, to stop injecting it; the index is cached under `.mawoagent/repo-index.json` and only re-parsed for files that changed.
+
 ### Core capabilities
 
 - **Web workbench**: chat, streaming replies, tool authorization, task details, Skills, evaluation, memory, and settings, all sharing the local Runtime.
@@ -480,9 +482,9 @@ The roadmap is split into eight iterations (I0–I7) covering 21 tasks and six r
 | I0 Baseline and development environment | 2 | 2 |
 | I1 Access range and edit review | 3 | 3 |
 | I2 File snapshots and undo | 2 | 2 |
-| I3–I7 Code understanding, isolation, tools, learning, automation | 14 | 1 |
+| I3–I7 Code understanding, isolation, tools, learning, automation | 14 | 2 |
 
-Current status: **8 of 21 tasks**: the first release I0–I2 is complete, and I3 has started with the Skill frontmatter fix. The [roadmap](docs/iteration-roadmap-2026-10-19.md) defines every task and its acceptance criteria; the [progress table](docs/iteration-progress.md) records what is delivered, what it was verified with, and which defects are still open.
+Current status: **9 of 21 tasks**: the first release I0–I2 is complete, and I3 has delivered the Skill frontmatter fix and the repository symbol index. The [roadmap](docs/iteration-roadmap-2026-10-19.md) defines every task and its acceptance criteria; the [progress table](docs/iteration-progress.md) records what is delivered, what it was verified with, and which defects are still open.
 
 ### More documentation
 
@@ -711,6 +713,8 @@ python -m agents.main --help
 每一轮对话都会留快照：某次修改发生前的内容会存到 `.mawoagent/snapshots`。`/diff` 查看最近一轮改了什么，`/undo` 撤销它，`/undo 2` 再往前一轮。若文件在该轮之后被手工改过，撤销会将其列为冲突并跳过。同样两个操作也提供 Web 接口：`GET /api/sessions/<id>/diff` 与 `POST /api/sessions/<id>/undo`。
 
 写入或编辑在执行前会以 unified diff 呈现，并绑定提案所依据的文件版本。若在你审阅期间文件发生变化，则不会写入，需要基于新内容重新发起。
+
+`/symbols` 输出工作区符号总览，`/symbols <查询>` 用于检索。同一份索引还会在系统提示词里生成一段简短的仓库地图，长度受 `context.repo_map_budget` 限制。在 `settings.json` 里设置 `"context": {"repo_map": false}`，或设置环境变量 `MAWOAGENT_REPO_MAP=off`，即可关闭注入；索引缓存在 `.mawoagent/repo-index.json`，只对发生变化的文件重新解析。
 
 ### 核心能力
 
@@ -987,9 +991,9 @@ node --test web/tests/*.test.mjs
 | I0 基线与开发环境 | 2 | 2 |
 | I1 访问范围与修改审阅 | 3 | 3 |
 | I2 文件快照与撤销 | 2 | 2 |
-| I3–I7 代码理解、隔离执行、工具、学习、自动化 | 14 | 1 |
+| I3–I7 代码理解、隔离执行、工具、学习、自动化 | 14 | 2 |
 
-当前进度：**21 个任务已完成 8 个**，首版范围 I0–I2 全部完成，I3 已从 Skill frontmatter 修复开始。[计划表](docs/iteration-roadmap-2026-10-19.md)定义每个任务及其验收标准，[进度表](docs/iteration-progress.md)记录已交付内容、对应的验证证据，以及尚未闭合的缺陷。
+当前进度：**21 个任务已完成 9 个**，首版范围 I0–I2 全部完成，I3 已交付 Skill frontmatter 修复与仓库符号索引。[计划表](docs/iteration-roadmap-2026-10-19.md)定义每个任务及其验收标准，[进度表](docs/iteration-progress.md)记录已交付内容、对应的验证证据，以及尚未闭合的缺陷。
 
 ### 更多文档
 
