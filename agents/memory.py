@@ -22,7 +22,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Awaitable, Callable
 
-from .frontmatter import parse_frontmatter, format_frontmatter
+from .frontmatter import as_text, parse_frontmatter, format_frontmatter
 from .storage import atomic_write_text, state_lock
 # side query 是一个异步函数：输入 system prompt 和 user prompt，返回模型文本。
 SideQueryFn = Callable[[str, str], Awaitable[str]]
@@ -94,10 +94,11 @@ def list_memories() -> list[MemoryEntry]:
             if not meta.get("name") or not meta.get("type"):
                 continue
             # type 不合法时降级为 project，避免坏文件中断列表。
-            t = meta["type"] if meta["type"] in VALID_TYPES else "project"
+            raw_type = as_text(meta["type"])
+            t = raw_type if raw_type in VALID_TYPES else "project"
             entry = MemoryEntry(
-                name=meta["name"],
-                description=meta.get("description", ""),
+                name=as_text(meta["name"]),
+                description=as_text(meta.get("description")),
                 type=t,
                 filename=f.name,
                 content=result.body,
@@ -229,12 +230,12 @@ def scan_memory_headers() -> list[MemoryHeader]:
         try:
             result = parse_frontmatter(_read_memory_header(f))
             meta = result.meta
-            t = meta.get("type")
+            t = as_text(meta.get("type"))
             headers.append(MemoryHeader(
                 filename=f.name,
                 file_path=str(f),
                 mtime_ms=mtime * 1000,
-                description=meta.get("description"),
+                description=as_text(meta.get("description")) or None,
                 type=t if t in VALID_TYPES else None,
             ))
         except (OSError, UnicodeError):

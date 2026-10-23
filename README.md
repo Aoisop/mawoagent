@@ -480,9 +480,9 @@ The roadmap is split into eight iterations (I0–I7) covering 21 tasks and six r
 | I0 Baseline and development environment | 2 | 2 |
 | I1 Access range and edit review | 3 | 3 |
 | I2 File snapshots and undo | 2 | 2 |
-| I3–I7 Code understanding, isolation, tools, learning, automation | 14 | 0 |
+| I3–I7 Code understanding, isolation, tools, learning, automation | 14 | 1 |
 
-Current status: **7 of 21 tasks**: the first release, I0–I2, is complete. I3 (Repo Map, symbol search, Skill YAML) is the next iteration. The [roadmap](docs/iteration-roadmap-2026-10-19.md) defines every task and its acceptance criteria; the [progress table](docs/iteration-progress.md) records what is delivered, what it was verified with, and which defects are still open.
+Current status: **8 of 21 tasks**: the first release I0–I2 is complete, and I3 has started with the Skill frontmatter fix. The [roadmap](docs/iteration-roadmap-2026-10-19.md) defines every task and its acceptance criteria; the [progress table](docs/iteration-progress.md) records what is delivered, what it was verified with, and which defects are still open.
 
 ### More documentation
 
@@ -987,9 +987,9 @@ node --test web/tests/*.test.mjs
 | I0 基线与开发环境 | 2 | 2 |
 | I1 访问范围与修改审阅 | 3 | 3 |
 | I2 文件快照与撤销 | 2 | 2 |
-| I3–I7 代码理解、隔离执行、工具、学习、自动化 | 14 | 0 |
+| I3–I7 代码理解、隔离执行、工具、学习、自动化 | 14 | 1 |
 
-当前进度：**21 个任务已完成 7 个**，首版范围 I0–I2 全部完成。下一轮是 I3：Repo Map、符号搜索与 Skill YAML。[计划表](docs/iteration-roadmap-2026-10-19.md)定义每个任务及其验收标准，[进度表](docs/iteration-progress.md)记录已交付内容、对应的验证证据，以及尚未闭合的缺陷。
+当前进度：**21 个任务已完成 8 个**，首版范围 I0–I2 全部完成，I3 已从 Skill frontmatter 修复开始。[计划表](docs/iteration-roadmap-2026-10-19.md)定义每个任务及其验收标准，[进度表](docs/iteration-progress.md)记录已交付内容、对应的验证证据，以及尚未闭合的缺陷。
 
 ### 更多文档
 

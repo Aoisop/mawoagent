@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .frontmatter import parse_frontmatter
+from .frontmatter import as_bool, as_list, as_text, parse_frontmatter
 from .skill_evolution import (
     create_skill_file,
     evolve_skill_file,
@@ -131,26 +131,20 @@ def _parse_skill_file(file_path: Path, source: str, skill_dir: str) -> SkillDefi
         meta = result.meta
 
         # name 没写时用目录名；user-invocable 默认 true；context 默认 inline。
-        name = meta.get("name") or file_path.parent.name or "unknown"
-        user_invocable = meta.get("user-invocable", "true") != "false"
-        context = "fork" if meta.get("context") == "fork" else "inline"
+        # 值可能是布尔或列表（YAML 语义），统一归一化后再用。
+        name = as_text(meta.get("name")) or file_path.parent.name or "unknown"
+        user_invocable = as_bool(meta.get("user-invocable"), True)
+        context = "fork" if as_text(meta.get("context")) == "fork" else "inline"
 
         allowed_tools: list[str] | None = None
         if "allowed-tools" in meta:
-            raw_tools = meta["allowed-tools"]
-            # allowed-tools 支持 JSON 数组字符串，也支持逗号分隔。
-            if raw_tools.startswith("["):
-                try:
-                    allowed_tools = json.loads(raw_tools)
-                except Exception:
-                    allowed_tools = [s.strip() for s in raw_tools.strip("[]").split(",")]
-            else:
-                allowed_tools = [s.strip() for s in raw_tools.split(",")]
+            # 允许 YAML 列表、JSON 数组字符串，或逗号分隔。
+            allowed_tools = as_list(meta["allowed-tools"])
 
         return SkillDefinition(
             name=name,
-            description=meta.get("description", ""),
-            when_to_use=meta.get("when_to_use") or meta.get("when-to-use"),
+            description=as_text(meta.get("description")),
+            when_to_use=as_text(meta.get("when_to_use") or meta.get("when-to-use")) or None,
             allowed_tools=allowed_tools,
             user_invocable=user_invocable,
             context=context,
