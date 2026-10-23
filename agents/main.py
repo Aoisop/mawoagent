@@ -16,6 +16,7 @@ from .config import (
     resolve_api_config as _resolve_api_config,
     resolve_agent_options,
 )
+from .version import __version__
 from .ui import (
     print_welcome,
     print_user_prompt,
@@ -51,6 +52,7 @@ def parse_args() -> argparse.Namespace:
         description="mawoagent — a minimal coding agent",
         add_help=False,
     )
+    parser.add_argument("--version", action="version", version=f"mawoagent {__version__}")
     parser.add_argument("prompt", nargs="*", help="One-shot prompt")
     parser.add_argument("--yolo", "-y", action="store_true", help="Skip all confirmation prompts")
     parser.add_argument("--plan", action="store_true", help="Plan mode: read-only")
