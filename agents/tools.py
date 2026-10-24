@@ -8,7 +8,6 @@ import hashlib
 import json
 import os
 import re
-import signal
 import stat
 import uuid
 from dataclasses import dataclass
@@ -16,6 +15,7 @@ from pathlib import Path
 from typing import Any, Callable, Literal
 
 from agents.memory import get_memory_dir
+from agents.sandbox import get_backend
 from agents.snapshots import record_before_change
 from agents.tool_schemas import ToolDef, tool_definitions
 from agents.workspace import WorkspaceContext, current_workspace, resolve_tool_path
@@ -496,51 +496,33 @@ def get_deferred_tool_names(all_tools: list[ToolDef] | None = None) -> list[str]
 
 #执行shell命令
 async def _run_shell(inp: ToolInput) -> str:
-    process = None
-    output_task = None
+    timeout_ms = inp.get("timeout", 30000)
+    timeout_s = timeout_ms / 1000
+    if timeout_s <= 0:
+        return "Error: timeout must be positive"
     try:
-        timeout_ms = inp.get("timeout", 30000)
-        timeout_s = timeout_ms / 1000
-        if timeout_s <= 0:
-            return "Error: timeout must be positive"
-        process = await asyncio.create_subprocess_shell(
-            inp["command"],
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            start_new_session=os.name != "nt",
-        )
-        output_task = asyncio.create_task(process.communicate())
-        stdout_bytes, stderr_bytes = await asyncio.wait_for(asyncio.shield(output_task), timeout_s)
-        stdout = stdout_bytes.decode(errors="replace")
-        stderr = stderr_bytes.decode(errors="replace")
-        output = stdout or ""
-        if process.returncode != 0:
-            stderr = f"\nStderr: {stderr}" if stderr else ""
-            stdout = f"\nStdout: {stdout}" if stdout else ""
-            return f"Command failed (exit code {process.returncode}){stdout}{stderr}"
-        if stderr:
-            output += ("\n" if output else "") + "Stderr:\n" + stderr
-        return output or "(no output)"
-    except asyncio.TimeoutError:
-        return f"Command timed out after {inp.get('timeout', 30000)}ms"
+        backend = get_backend()
+        result = await backend.run(inp["command"], timeout_s=timeout_s)
     except asyncio.CancelledError:
         raise
     except Exception as e:
         return f"Error: {e}"
-    finally:
-        if process is not None and output_task is not None and not output_task.done():
-            try:
-                if os.name == "nt":
-                    killer = await asyncio.create_subprocess_exec(
-                        "taskkill", "/PID", str(process.pid), "/T", "/F",
-                        stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
-                    await killer.wait()
-                else:
-                    os.killpg(process.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
-            await output_task
-            await process.wait()
+
+    if result.timed_out:
+        return f"Command timed out after {timeout_ms}ms"
+    if result.error:
+        return f"Error: {result.error}"
+
+    stdout = result.stdout
+    stderr = result.stderr
+    if result.returncode != 0:
+        stderr = f"\nStderr: {stderr}" if stderr else ""
+        stdout = f"\nStdout: {stdout}" if stdout else ""
+        return f"Command failed (exit code {result.returncode}){stdout}{stderr}"
+    output = stdout or ""
+    if stderr:
+        output += ("\n" if output else "") + "Stderr:\n" + stderr
+    return output or "(no output)"
 
 
 #危险命令检测模式列表

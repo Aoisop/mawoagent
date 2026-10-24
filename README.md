@@ -482,9 +482,9 @@ The roadmap is split into eight iterations (I0–I7) covering 21 tasks and six r
 | I0 Baseline and development environment | 2 | 2 |
 | I1 Access range and edit review | 3 | 3 |
 | I2 File snapshots and undo | 2 | 2 |
-| I3–I7 Code understanding, isolation, tools, learning, automation | 14 | 3 |
+| I3–I7 Code understanding, isolation, tools, learning, automation | 14 | 4 |
 
-Current status: **10 of 21 tasks**: I0–I3 are complete. I4 (isolated execution) is next; it is the prerequisite for unattended writes. The [roadmap](docs/iteration-roadmap-2026-10-19.md) defines every task and its acceptance criteria; the [progress table](docs/iteration-progress.md) records what is delivered, what it was verified with, and which defects are still open.
+Current status: **11 of 21 tasks**: I0–I3 are complete and I4 has started with the execution backend abstraction. The [roadmap](docs/iteration-roadmap-2026-10-19.md) defines every task and its acceptance criteria; the [progress table](docs/iteration-progress.md) records what is delivered, what it was verified with, and which defects are still open.
 
 ### More documentation
 
@@ -992,9 +992,9 @@ node --test web/tests/*.test.mjs
 | I0 基线与开发环境 | 2 | 2 |
 | I1 访问范围与修改审阅 | 3 | 3 |
 | I2 文件快照与撤销 | 2 | 2 |
-| I3–I7 代码理解、隔离执行、工具、学习、自动化 | 14 | 3 |
+| I3–I7 代码理解、隔离执行、工具、学习、自动化 | 14 | 4 |
 
-当前进度：**21 个任务已完成 10 个**，I0–I3 全部完成。下一步是 I4 隔离执行，它是无人值守写入的前置条件。[计划表](docs/iteration-roadmap-2026-10-19.md)定义每个任务及其验收标准，[进度表](docs/iteration-progress.md)记录已交付内容、对应的验证证据，以及尚未闭合的缺陷。
+当前进度：**21 个任务已完成 11 个**，I0–I3 全部完成，I4 已从执行后端抽象开始。[计划表](docs/iteration-roadmap-2026-10-19.md)定义每个任务及其验收标准，[进度表](docs/iteration-progress.md)记录已交付内容、对应的验证证据，以及尚未闭合的缺陷。
 
 ### 更多文档
 
