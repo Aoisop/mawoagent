@@ -47,7 +47,13 @@ class LocalBackendTests(unittest.TestCase):
     def test_working_directory_is_respected(self) -> None:
         target = self.root / "sub"
         target.mkdir()
-        result = run(self.backend.run("cd", timeout_s=10, cwd=target))
+        # `cd` prints the directory only in cmd; ask Python so the check is the
+        # same on every platform.
+        result = run(self.backend.run(
+            f'"{sys.executable}" -c "import os; print(os.getcwd())"',
+            timeout_s=10,
+            cwd=target,
+        ))
         self.assertIn("sub", result.stdout)
 
     def test_environment_is_merged_not_replaced(self) -> None:
