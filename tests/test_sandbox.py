@@ -120,3 +120,72 @@ class RunShellFormattingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class DockerBackendTests(unittest.TestCase):
+    """The container backend, exercised through a fake client (no daemon here)."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        self.fake = self.root / "fake_docker.py"
+        self.fake.write_text(
+            "import sys, time\n"
+            "print(' '.join(sys.argv[1:]))\n"
+            "if 'sleep' in sys.argv[-1]:\n"
+            "    time.sleep(5)\n",
+            encoding="utf-8",
+        )
+        self.backend = sandbox.DockerBackend(docker=[sys.executable, str(self.fake)])
+
+    def args(self, command: str = "echo hi", env=None) -> list[str]:
+        return self.backend.docker_args(command, container="c1", workspace=self.root, env=env)
+
+    def test_container_is_network_isolated_and_capped(self) -> None:
+        args = self.args()
+        self.assertIn("--network", args)
+        self.assertEqual(args[args.index("--network") + 1], "none")
+        self.assertEqual(args[args.index("--memory") + 1], "2g")
+        self.assertEqual(args[args.index("--cpus") + 1], "2")
+        self.assertEqual(args[args.index("--pids-limit") + 1], "256")
+
+    def test_only_the_workspace_is_mounted(self) -> None:
+        mounts = [args for args in self.args() if ":/work" in args]
+        self.assertEqual(len(mounts), 1)
+        self.assertTrue(mounts[0].startswith(str(self.root)))
+
+    def test_command_runs_through_a_login_shell_in_the_mount(self) -> None:
+        args = self.args("echo hi")
+        self.assertEqual(args[-3:], ["sh", "-lc", "echo hi"])
+        self.assertEqual(args[args.index("-w") + 1], "/work")
+        self.assertEqual(args[-4], self.backend.image)
+
+    def test_environment_is_passed_explicitly(self) -> None:
+        args = self.args(env={"MAWO_PROBE": "yes"})
+        self.assertEqual(args[args.index("-e") + 1], "MAWO_PROBE=yes")
+        self.assertLess(args.index("-e"), args.index(self.backend.image))
+
+    def test_run_reports_the_backend_name(self) -> None:
+        result = asyncio.run(self.backend.run("echo hi", timeout_s=10, cwd=self.root))
+        self.assertEqual(result.backend, "docker")
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("--network none", result.stdout.replace("\n", " "))
+
+    def test_missing_workspace_is_rejected_before_docker_is_called(self) -> None:
+        result = asyncio.run(self.backend.run("echo hi", timeout_s=5, cwd=self.root / "nope"))
+        self.assertIsNone(result.returncode)
+        self.assertIn("not a directory", result.error)
+
+    def test_timeout_removes_the_container(self) -> None:
+        backend = sandbox.DockerBackend(docker=[sys.executable, str(self.fake)])
+        backend.remove_container = mock.AsyncMock()
+        result = asyncio.run(backend.run("sleep", timeout_s=0.3, cwd=self.root))
+        self.assertTrue(result.timed_out)
+        backend.remove_container.assert_awaited_once()
+
+    def test_selection_builds_a_docker_backend(self) -> None:
+        with mock.patch.dict(os.environ, {"MAWOAGENT_SANDBOX": "docker", "MAWOAGENT_SANDBOX_IMAGE": "img:test"}):
+            backend = get_backend()
+        self.assertIsInstance(backend, sandbox.DockerBackend)
+        self.assertEqual(backend.image, "img:test")

@@ -24,7 +24,7 @@
 | I1 访问范围与修改审阅 | P0 | 3 | 3 | ✅ 完成 |
 | I2 文件快照与撤销 | P0 | 2 | 2 | ✅ 完成 |
 | I3 代码理解与任务对照 | P1 | 3 | 3 | ✅ 完成 |
-| I4 隔离执行 | P1 | 2 | 1 | 🚧 进行中（缺 T12） |
+| I4 隔离执行 | P1 | 2 | 2 | 🚧 T11 有未验证项，T12 未开始 |
 | I5 浏览器与远程工具 | P1 | 3 | 0 | 未开始 |
 | I6 技能学习与记忆闭环 | P2 | 3 | 0 | 未开始 |
 | I7 自动化与受控并发 | P2 | 3 | 0 | 未开始 |
@@ -43,8 +43,8 @@
 | T08 Repo Map 与符号搜索 | I3 | ✅ | `agents/repo_index.py`、`agents/prompt.py`、`agents/main.py` | Python 走 `ast`，JS/TS 走模式匹配并标注为近似；增量索引按 size+mtime 复用；跳过依赖/状态目录与超限文件；`/symbols` 查询，提示词注入可用 `context.repo_map` 或环境变量关闭 |
 | T09 任务对照与消融 | I3 | ✅ | `agents/eval_run.py` | `python -m agents.eval_run` 逐任务记录 JSONL（成功/失败/超时/异常都留痕）；`--mock` 供 CI 验证管线；变体按仓库地图开关分组并汇总成功率、工具次数、token、耗时 |
 | T10 Skill YAML frontmatter | I3 | ✅ | `agents/frontmatter.py`、`agents/skills.py`、`agents/memory.py` | 无第三方依赖的 YAML 子集：引号/布尔/null/数字、块与流式列表、缩进嵌套、字面量与折叠块标量、注释；旧格式回退；`format_frontmatter` 可精确回读 |
-| T11 执行后端抽象 | I4 | ✅ | `agents/sandbox.py`、`agents/tools.py` | 统一 `ExecutionBackend.run()` 与 `ExecResult`；本地后端复刻原有行为（同 shell、同会话、同进程树清理、同超时）；`MAWOAGENT_SANDBOX` 选择后端，未知后端显式报错 |
-| T12 容器状态映射与 Web 接入 | I4 | ⬜ | — | 依赖 T11 |
+| T11 执行后端与 Docker 入口 | I4 | ✅ | `agents/sandbox.py`、`Dockerfile.sandbox`、`agents/tools.py` | 统一 `ExecutionBackend.run()`/`ExecResult`；本地后端复刻原行为（同 shell、同会话、同进程树清理）；Docker 后端只挂工作区、`--network none`、内存/CPU/PID 上限、`no-new-privileges`、超时按容器名清理；`MAWOAGENT_SANDBOX` 选择后端。**未验证**：无 Docker 环境，容器内行为未实测；「独立副本模式」未实现 |
+| T12 容器状态映射与 Web 接入 | I4 | ⬜ | — | 依赖 T11；需要会话/记忆/Web 在容器内可用，并保留 Host/Origin/CSRF 防护 |
 | T13 浏览器 MCP（Playwright） | I5 | ⬜ | — | `.mcp.json` 有配置，但 Windows 上必然启动失败（见已知缺陷） |
 | T14 远程 MCP 传输 | I5 | ⬜ | — | `mcp_client.py` 无 SSE／streamable 传输 |
 | T15 工具结果类型化 | I5 | ⬜ | — | 现有结果存储不计入 |
@@ -85,7 +85,7 @@
 
 | 口径 | 结果 |
 | --- | --- |
-| 完整套件 | 387 个用例，`OK (skipped=8)`，约 240 秒 |
+| 完整套件 | 395 个用例，`OK (skipped=8)`，约 240 秒 |
 | CI 矩阵 | 3 个平台 × Python 3.11/3.12 加前端作业，最近一次（run #21）全部通过 |
 | 前端 | `node --check web/app.js` 通过；30 个单测通过 |
 | 跳过原因 | 2 个符号链接用例（Windows 需开发者模式）；其余为既有平台条件跳过 |

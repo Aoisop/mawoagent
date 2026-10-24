@@ -1,0 +1,24 @@
+# Sandbox image for the Docker execution backend (I4 / T12).
+#
+# Build:  docker build -f Dockerfile.sandbox -t mawoagent/sandbox:0.2 .
+# Use:    MAWOAGENT_SANDBOX=docker MAWOAGENT_SANDBOX_IMAGE=mawoagent/sandbox:0.2
+#
+# The runtime mounts exactly one host directory at /work and runs with
+# --network none by default. Tooling here matches what the local backend can
+# already do (shell, python, git, ripgrep), so a task behaves the same in both.
+#
+# The container user is uid 10001. On Linux bind mounts keep host ownership, so
+# either make the workspace writable by that uid or pass
+# MAWOAGENT_SANDBOX_USER=$(id -u):$(id -g).
+FROM python:3.12-slim
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ripgrep ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd --create-home --uid 10001 --shell /bin/bash sandbox
+
+WORKDIR /work
+USER sandbox
+
+CMD ["sleep", "infinity"]

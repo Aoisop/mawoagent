@@ -205,6 +205,8 @@ Every user turn is snapshotted: the first time a file changes, its previous cont
 
 A write or an edit is shown as a unified diff before it runs, bound to the exact file version it was built from. If the file changes while you are deciding, nothing is written and the change has to be repeated against the new content.
 
+Shell commands run through a pluggable backend. `MAWOAGENT_SANDBOX=local` (default) runs on the host; `MAWOAGENT_SANDBOX=docker` runs each command in a container built from `Dockerfile.sandbox`, with only the workspace mounted, no network, and memory/CPU/PID limits. The container path is implemented and unit-tested but has not been exercised against a real daemon yet.
+
 `/symbols` outlines the workspace and `/symbols <query>` searches it. The same index feeds a short repository map in the system prompt, capped by `context.repo_map_budget`. Set `"context": {"repo_map": false}` in `settings.json`, or `MAWOAGENT_REPO_MAP=off`, to stop injecting it; the index is cached under `.mawoagent/repo-index.json` and only re-parsed for files that changed.
 
 ### Core capabilities
@@ -714,6 +716,8 @@ python -m agents.main --help
 每一轮对话都会留快照：某次修改发生前的内容会存到 `.mawoagent/snapshots`。`/diff` 查看最近一轮改了什么，`/undo` 撤销它，`/undo 2` 再往前一轮。若文件在该轮之后被手工改过，撤销会将其列为冲突并跳过。同样两个操作也提供 Web 接口：`GET /api/sessions/<id>/diff` 与 `POST /api/sessions/<id>/undo`。
 
 写入或编辑在执行前会以 unified diff 呈现，并绑定提案所依据的文件版本。若在你审阅期间文件发生变化，则不会写入，需要基于新内容重新发起。
+
+Shell 命令走可插拔的执行后端：`MAWOAGENT_SANDBOX=local`（默认）在宿主机执行；`MAWOAGENT_SANDBOX=docker` 则在由 `Dockerfile.sandbox` 构建的容器里执行，只挂载工作区、无网络、限制内存与 CPU。容器路径已实现并有单元测试，但尚未在真实 Docker 守护进程上验证。
 
 `/symbols` 输出工作区符号总览，`/symbols <查询>` 用于检索。同一份索引还会在系统提示词里生成一段简短的仓库地图，长度受 `context.repo_map_budget` 限制。在 `settings.json` 里设置 `"context": {"repo_map": false}`，或设置环境变量 `MAWOAGENT_REPO_MAP=off`，即可关闭注入；索引缓存在 `.mawoagent/repo-index.json`，只对发生变化的文件重新解析。
 
