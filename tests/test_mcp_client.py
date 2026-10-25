@@ -32,7 +32,10 @@ class McpToolTimeoutTests(unittest.IsolatedAsyncioTestCase):
                 await manager.call_tool("mcp__demo__ping", {})
 
         self.assertEqual(connection._pending, {})
-        self.assertEqual(len(stdin.writes), 1)
+        # The request itself, then the cancellation notice the server needs in
+        # order to stop working on it.
+        self.assertEqual(len(stdin.writes), 2)
+        self.assertIn(b"notifications/cancelled", stdin.writes[1])
 
         async def respond() -> None:
             while not connection._pending:

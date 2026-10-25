@@ -37,6 +37,14 @@ import signal
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
+from .mcp_http import (
+    MCP_PROTOCOL_VERSION,
+    SUPPORTED_PROTOCOL_VERSIONS,
+    HttpTransport,
+    McpAuthRequired,
+    McpHttpError,
+    resolve_token,
+)
 from .tool_content import capability_report, from_mcp_content
 from .ui import print_error, print_info
 
@@ -81,8 +89,9 @@ class BorrowedMcpManager:
 class McpConnection:
     """管理单个 MCP Server 子进程，以及和它之间的 JSON-RPC 通信。"""
 
-    def __init__(self, server_name: str, command: str, args: list[str] | None = None,
-                 env: dict[str, str] | None = None):
+    def __init__(self, server_name: str, command: str | None = None, args: list[str] | None = None,
+                 env: dict[str, str] | None = None, *, url: str | None = None,
+                 headers: dict[str, str] | None = None, auth: dict | None = None):
         # MCP Server 在配置中的名称，用于后续生成工具名前缀和路由工具调用。
         self.server_name = server_name
         # 启动 MCP Server 的命令，例如 `node`、`python`、某个可执行文件路径等。
@@ -91,6 +100,13 @@ class McpConnection:
         self.args = args or []
         # 额外环境变量。连接时会和当前进程环境变量合并。
         self.env = env or {}
+        # Remote transport. When a url is configured the server is reached over
+        # HTTP instead of being spawned, and `command` is unused.
+        self.url = url
+        self.headers = headers or {}
+        self.auth = auth
+        self._http: HttpTransport | None = None
+        self.negotiated_version: str | None = None
         # MCP Server 子进程对象。连接成功前为空。
         self._process: asyncio.subprocess.Process | None = None
         # JSON-RPC 请求 id 自增计数器，用于把请求和响应对应起来。
@@ -104,10 +120,20 @@ class McpConnection:
         self._reader_error: Exception | None = None
 
     async def connect(self) -> None:
-        """启动 MCP Server 子进程，并开始后台读取它的 stdout。"""
+        """Start a stdio server, or prepare the remote session."""
+        self._reader_error = None
+        if self.url:
+            # Remote servers have no process to supervise; the session header is
+            # established by the initialize exchange.
+            self._http = HttpTransport(
+                self.url,
+                token=resolve_token(self.auth),
+                headers=self.headers,
+            )
+            return
+
         # 子进程环境变量 = 当前进程环境变量 + 配置里声明的额外变量。
         merged_env = {**os.environ, **self.env}
-        self._reader_error = None
         # 使用 stdio 模式启动 MCP Server：
         # - stdin：客户端向 Server 写 JSON-RPC 请求。
         # - stdout：Server 向客户端返回 JSON-RPC 响应。
@@ -191,19 +217,27 @@ class McpConnection:
         """发送一条 JSON-RPC request，并等待对应 id 的 response。"""
         if self._reader_error is not None:
             raise RuntimeError(str(self._reader_error))
-        assert self._process and self._process.stdin
         # 为本次请求分配唯一 id。读循环会用这个 id 找到对应 Future。
         req_id = self._next_id
         self._next_id += 1
+        payload = {"jsonrpc": "2.0", "id": req_id, "method": method, "params": params or {}}
 
-        # JSON-RPC 2.0 请求格式：
-        # {
-        #   "jsonrpc": "2.0",
-        #   "id": 1,
-        #   "method": "...",
-        #   "params": {...}
-        # }
-        msg = json.dumps({"jsonrpc": "2.0", "id": req_id, "method": method, "params": params or {}})
+        if self._http is not None:
+            try:
+                response = await self._http.post(payload)
+            except asyncio.CancelledError:
+                # The server may still be working on it; tell it to stop.
+                self._notify_cancel(req_id)
+                raise
+            if response is None:
+                return None
+            if "error" in response:
+                error = response["error"]
+                raise RuntimeError(f"MCP error {error.get('code')}: {error.get('message')}")
+            return response.get("result")
+
+        assert self._process and self._process.stdin
+        msg = json.dumps(payload)
         loop = asyncio.get_running_loop()
         fut: asyncio.Future = loop.create_future()
         self._pending[req_id] = fut
@@ -216,6 +250,7 @@ class McpConnection:
             self._pending.pop(req_id, None)
             if not fut.done():
                 fut.cancel()
+            self._notify_cancel(req_id)
             raise
         except Exception:
             self._pending.pop(req_id, None)
@@ -223,8 +258,31 @@ class McpConnection:
                 fut.cancel()
             raise
 
+    def _notify_cancel(self, request_id: int) -> None:
+        """Best-effort cancellation; never raises or blocks the caller."""
+
+        message = {"jsonrpc": "2.0", "method": "notifications/cancelled", "params": {"requestId": request_id}}
+        if self._http is not None:
+            try:
+                asyncio.get_running_loop().create_task(self._http.notify(message))
+            except RuntimeError:
+                pass
+            return
+        try:
+            self._send_notification("notifications/cancelled", {"requestId": request_id})
+        except Exception:  # noqa: BLE001
+            pass
+
     def _send_notification(self, method: str, params: dict | None = None) -> None:
         """发送一条 JSON-RPC notification。notification 没有 id，也不等待响应。"""
+        if self._http is not None:
+            try:
+                asyncio.get_running_loop().create_task(
+                    self._http.notify({"jsonrpc": "2.0", "method": method, "params": params or {}})
+                )
+            except RuntimeError:
+                pass
+            return
         if not self._process or not self._process.stdin:
             return
         msg = json.dumps({"jsonrpc": "2.0", "method": method, "params": params or {}})
@@ -233,19 +291,35 @@ class McpConnection:
     async def initialize(self) -> None:
         """执行 MCP 初始化握手。"""
         # initialize 是 MCP 连接建立后的第一步，用于协商协议版本和客户端信息。
-        await self._send_request("initialize", {
-            "protocolVersion": "2024-11-05",
+        result = await self._send_request("initialize", {
+            "protocolVersion": MCP_PROTOCOL_VERSION,
             "capabilities": {},
             "clientInfo": {"name": "mawoagent", "version": "1.0.0"},
         })
+        version = result.get("protocolVersion") if isinstance(result, dict) else None
+        if version and version not in SUPPORTED_PROTOCOL_VERSIONS:
+            # Half-understanding a newer protocol is worse than refusing it.
+            raise RuntimeError(f"unsupported MCP protocol version: {version}")
+        self.negotiated_version = version or MCP_PROTOCOL_VERSION
+        if self._http is not None:
+            self._http.protocol_version = self.negotiated_version
         # 初始化请求成功后，按 MCP 协议发送 initialized 通知。
         self._send_notification("notifications/initialized")
 
     async def list_tools(self) -> list[dict]:
-        """从当前 MCP Server 查询可用工具列表。"""
-        result = await self._send_request("tools/list")
-        if not result or not isinstance(result.get("tools"), list):
-            return []
+        """从当前 MCP Server 查询可用工具列表，跟随 nextCursor 分页。"""
+        collected: list[dict] = []
+        cursor: str | None = None
+        for _ in range(20):
+            result = await self._send_request("tools/list", {"cursor": cursor} if cursor else {})
+            if not isinstance(result, dict):
+                break
+            tools = result.get("tools")
+            if isinstance(tools, list):
+                collected.extend(tools)
+            cursor = result.get("nextCursor")
+            if not cursor:
+                break
         # 这里保留 MCP 原始 inputSchema，同时附加 serverName，方便上层做工具名加前缀和路由。
         return [
             {
@@ -254,7 +328,8 @@ class McpConnection:
                 "inputSchema": t.get("inputSchema"),
                 "serverName": self.server_name,
             }
-            for t in result["tools"]
+            for t in collected
+            if isinstance(t, dict) and "name" in t
         ]
 
     async def call_tool(self, name: str, args: dict) -> str:
@@ -310,6 +385,7 @@ class McpConnection:
             self._process = None
         # 连接关闭后，所有还没收到响应的请求都不可能再完成，需要显式置为异常。
         self._fail_pending(RuntimeError(f"MCP server '{self.server_name}' closed"))
+        self._http = None
 
     async def aclose(self) -> None:
         process = self._process
@@ -360,16 +436,29 @@ class McpManager:
         for name, cfg in configs.items():
             conn = None
             try:
-                # Configuration discovery must never implicitly execute project commands.
-                startup = {
-                    "server_name": name,
-                    "command": shlex.join([cfg["command"], *(cfg.get("args") or [])]),
-                    "cwd": str(Path.cwd()),
-                }
+                # Configuration discovery must never implicitly execute project
+                # commands or contact a remote endpoint before approval.
+                remote = bool(cfg.get("url"))
+                startup: dict[str, str] = {"server_name": name, "cwd": str(Path.cwd())}
+                if remote:
+                    startup.update({"transport": "http", "url": cfg["url"]})
+                else:
+                    startup.update({
+                        "transport": "stdio",
+                        "command": shlex.join([cfg["command"], *(cfg.get("args") or [])]),
+                    })
                 if authorize_start is None or not await authorize_start("mcp_start", startup):
                     print_info(f"MCP startup denied: {name}")
                     continue
-                conn = McpConnection(name, cfg["command"], cfg.get("args"), cfg.get("env"))
+                conn = McpConnection(
+                    name,
+                    cfg.get("command"),
+                    cfg.get("args"),
+                    cfg.get("env"),
+                    url=cfg.get("url"),
+                    headers=cfg.get("headers"),
+                    auth=cfg.get("auth"),
+                )
                 # 连接子进程 -> MCP 初始化握手 -> 查询工具列表。
                 await conn.connect()
                 await asyncio.wait_for(conn.initialize(), timeout=timeout)
@@ -465,8 +554,8 @@ class McpManager:
             # 2. {"name": {...}}
             servers = raw.get("mcpServers", raw)
             for name, config in servers.items():
-                # 只接收包含 command 的对象；无效配置直接忽略。
-                if isinstance(config, dict) and "command" in config:
+                # 接收 stdio（command）或 remote（url）配置；其余忽略。
+                if isinstance(config, dict) and ("command" in config or "url" in config):
                     target[name] = config
         except Exception:
             # 配置文件格式错误时跳过，避免一个坏配置导致整个 Agent 启动失败。
