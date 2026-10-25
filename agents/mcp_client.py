@@ -37,6 +37,7 @@ import signal
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
+from .tool_content import capability_report, from_mcp_content
 from .ui import print_error, print_info
 
 MCP_TOOL_TIMEOUT_SECONDS = 60.0
@@ -262,13 +263,25 @@ class McpConnection:
         if isinstance(result, dict) and result.get("isError") is True:
             raise McpToolError(result)
         if isinstance(result, dict) and isinstance(result.get("content"), list):
-            # MCP 工具结果通常是 content block 列表。当前 Agent 只消费 text block。
-            text = "\n".join(
-                c["text"] for c in result["content"] if c.get("type") == "text"
-            )
+            # Text blocks are joined exactly as before. Images, audio and
+            # resource links become attachments: the payload is written to disk
+            # and only a description enters the conversation.
+            content = from_mcp_content(result["content"], name)
+            body = content.text
             if result.get("structuredContent") is not None:
-                text += "\n" + json.dumps(result["structuredContent"], ensure_ascii=False)
-            return text or json.dumps(result, ensure_ascii=False)
+                structured = json.dumps(result["structuredContent"], ensure_ascii=False)
+                body = f"{body}\n{structured}" if body else structured
+            described = "\n".join(item.describe() for item in content.attachments)
+            combined = "\n".join(part for part in (body, described) if part)
+            report = capability_report(content)
+            if report["unsupported"]:
+                kinds = ", ".join(report["unsupported"])
+                combined = f"{combined}\n[not displayable in this runtime: {kinds}]" if combined \
+                    else f"[not displayable in this runtime: {kinds}]"
+            if combined:
+                return combined
+            count = len(result["content"])
+            return f"[MCP returned {count} content block(s) this runtime cannot display]"
         # 如果不是标准 content list，就退回为 JSON 字符串，避免丢失信息。
         return json.dumps(result)
 

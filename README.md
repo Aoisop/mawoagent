@@ -219,6 +219,7 @@ Shell commands run through a pluggable backend. `MAWOAGENT_SANDBOX=local` (defau
 - **Skills**: reusable methods stored in project-level and user-level `SKILL.md` files, with retrieval, invocation, inline / fork execution, and versioned evolution.
 - **Long-term Memory**: memories isolated by a hash of the project path, storing user preferences, project background, past decisions, and reference material.
 - **Skill self-evolution**: extracts reusable rules from user feedback, stores isolated candidates, and publishes them to `SKILL.md` only after evaluation or explicit manual review.
+- **Typed tool results**: text results keep their exact previous form, while images and resource links are stored once and referenced by path, so a base64 payload never enters the conversation.
 - **MCP external tools**: a stdio JSON-RPC MCP client based on the upstream implementation that exposes external MCP server tools as `mcp__server__tool`.
 - **Sub-agents**: `explore`, `plan`, `general`, and custom sub-agents.
 - **Session recovery and context compaction**: sessions are saved automatically; `--resume` and `/compact` are supported, and large tool results are truncated or persisted.
@@ -484,9 +485,9 @@ The roadmap is split into eight iterations (I0–I7) covering 21 tasks and six r
 | I0 Baseline and development environment | 2 | 2 |
 | I1 Access range and edit review | 3 | 3 |
 | I2 File snapshots and undo | 2 | 2 |
-| I3–I7 Code understanding, isolation, tools, learning, automation | 14 | 5 |
+| I3–I7 Code understanding, isolation, tools, learning, automation | 14 | 6 |
 
-Current status: **12 of 21 tasks**: I0–I4 are complete. Container isolation itself still needs a machine with Docker to verify. The [roadmap](docs/iteration-roadmap-2026-10-19.md) defines every task and its acceptance criteria; the [progress table](docs/iteration-progress.md) records what is delivered, what it was verified with, and which defects are still open.
+Current status: **13 of 21 tasks**: I0–I4 are complete and I5 has started with typed tool results. Container isolation itself still needs a machine with Docker to verify. The [roadmap](docs/iteration-roadmap-2026-10-19.md) defines every task and its acceptance criteria; the [progress table](docs/iteration-progress.md) records what is delivered, what it was verified with, and which defects are still open.
 
 ### More documentation
 
@@ -996,9 +997,9 @@ node --test web/tests/*.test.mjs
 | I0 基线与开发环境 | 2 | 2 |
 | I1 访问范围与修改审阅 | 3 | 3 |
 | I2 文件快照与撤销 | 2 | 2 |
-| I3–I7 代码理解、隔离执行、工具、学习、自动化 | 14 | 5 |
+| I3–I7 代码理解、隔离执行、工具、学习、自动化 | 14 | 6 |
 
-当前进度：**21 个任务已完成 12 个**，I0–I4 全部完成；容器内行为仍需在有 Docker 的机器上验证。[计划表](docs/iteration-roadmap-2026-10-19.md)定义每个任务及其验收标准，[进度表](docs/iteration-progress.md)记录已交付内容、对应的验证证据，以及尚未闭合的缺陷。
+当前进度：**21 个任务已完成 13 个**，I0–I4 全部完成，I5 已从类型化工具结果开始；容器内行为仍需在有 Docker 的机器上验证。[计划表](docs/iteration-roadmap-2026-10-19.md)定义每个任务及其验收标准，[进度表](docs/iteration-progress.md)记录已交付内容、对应的验证证据，以及尚未闭合的缺陷。
 
 ### 更多文档
 

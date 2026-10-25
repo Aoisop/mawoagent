@@ -94,6 +94,23 @@ def atomic_write_text(path: Path, content: str) -> None:
             os.unlink(temporary)
 
 
+def atomic_write_bytes(path: Path, content: bytes) -> None:
+    """Binary counterpart of atomic_write_text, used for tool attachments."""
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix="." + path.name + ".", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
 def write_json(path: Path, value) -> None:
     atomic_write_text(path, json.dumps(value, ensure_ascii=False, indent=2,
                                      sort_keys=True, default=str) + "\n")
