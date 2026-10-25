@@ -118,6 +118,54 @@ class RunShellFormattingTests(unittest.TestCase):
         self.assertIsInstance(run(_run_shell({"command": "echo x"})), str)
 
 
+class CopyModeTests(unittest.TestCase):
+    """Copy mode previews a command instead of applying it."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+        (self.root / "a.txt").write_text("one\n", encoding="utf-8")
+        (self.root / "script.py").write_text(
+            "from pathlib import Path\n"
+            "Path('a.txt').write_text('two\\n')\n"
+            "Path('b.txt').write_text('new\\n')\n",
+            encoding="utf-8",
+        )
+        self.backend = sandbox.CopyingBackend(LocalBackend())
+
+    def test_real_workspace_is_untouched(self) -> None:
+        asyncio.run(self.backend.run(f'"{sys.executable}" script.py', timeout_s=20, cwd=self.root))
+        self.assertEqual((self.root / "a.txt").read_text(encoding="utf-8"), "one\n")
+        self.assertFalse((self.root / "b.txt").exists())
+
+    def test_changes_are_reported(self) -> None:
+        result = asyncio.run(self.backend.run(f'"{sys.executable}" script.py', timeout_s=20, cwd=self.root))
+        self.assertEqual(result.backend, "copy")
+        self.assertIn("M a.txt", result.changed)
+        self.assertIn("A b.txt", result.changed)
+
+    def test_deletion_is_reported(self) -> None:
+        (self.root / "gone.py").write_text("from pathlib import Path\nPath('a.txt').unlink()\n", encoding="utf-8")
+        result = asyncio.run(self.backend.run(f'"{sys.executable}" gone.py', timeout_s=20, cwd=self.root))
+        self.assertIn("D a.txt", result.changed)
+
+    def test_runtime_state_is_not_copied(self) -> None:
+        (self.root / ".mawoagent").mkdir()
+        (self.root / ".mawoagent" / "state.json").write_text("{}", encoding="utf-8")
+        result = asyncio.run(self.backend.run(f'"{sys.executable}" -c "pass"', timeout_s=20, cwd=self.root))
+        self.assertEqual(result.changed, [])
+
+    def test_mode_selects_the_wrapper(self) -> None:
+        with mock.patch.dict(os.environ, {"MAWOAGENT_SANDBOX_MODE": "copy"}):
+            self.assertIsInstance(get_backend("local"), sandbox.CopyingBackend)
+
+    def test_unknown_mode_is_rejected(self) -> None:
+        with mock.patch.dict(os.environ, {"MAWOAGENT_SANDBOX_MODE": "magic"}):
+            with self.assertRaises(ValueError):
+                get_backend("local")
+
+
 if __name__ == "__main__":
     unittest.main()
 

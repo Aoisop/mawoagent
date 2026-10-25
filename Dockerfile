@@ -39,11 +39,20 @@ COPY requirements.lock .
 RUN pip install --no-cache-dir -r requirements.lock
 
 COPY agents ./agents
+COPY web ./web
 COPY README.md .
 
 RUN mkdir -p /workspace
 COPY .mcp.json /workspace/.mcp.json
 
 WORKDIR /workspace
+
+# The web workbench serves its static files from web/; binding inside a
+# container also needs an explicit host and an allowed Host header, because the
+# published port differs from the listening one:
+#   docker run -p 8765:8765 -e MAWOAGENT_WEB_HOST=0.0.0.0 \
+#     -e MAWOAGENT_WEB_ALLOWED_HOSTS=localhost:8765,127.0.0.1:8765 <image> \
+#     python -m agents.web --port 8765
+EXPOSE 8765
 
 ENTRYPOINT ["python", "-m", "agents.main"]

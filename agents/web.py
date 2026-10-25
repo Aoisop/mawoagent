@@ -609,6 +609,27 @@ class WebApp:
         self.loop.close()
 
 
+def web_bind_host() -> str:
+    """Where the server listens. A container has to ask for 0.0.0.0 explicitly."""
+
+    return (os.environ.get("MAWOAGENT_WEB_HOST") or "127.0.0.1").strip()
+
+
+def allowed_hosts(port: int) -> set[str]:
+    """Host headers that may reach the API.
+
+    Loopback is always allowed. A published container port arrives under a
+    different port than the server listens on, so those names have to be listed
+    explicitly instead of loosening the check for everyone.
+    """
+
+    hosts = {f"127.0.0.1:{port}", f"localhost:{port}"}
+    for item in (os.environ.get("MAWOAGENT_WEB_ALLOWED_HOSTS") or "").split(","):
+        if item.strip():
+            hosts.add(item.strip())
+    return hosts
+
+
 class WebServer(ThreadingHTTPServer):
     daemon_threads = True
 
@@ -664,7 +685,7 @@ class WebHandler(BaseHTTPRequestHandler):
     def guard(self, mutation=False, bootstrap=False):
         port = self.server.server_port
         host = self.headers.get("Host", "")
-        if host not in {f"127.0.0.1:{port}", f"localhost:{port}"}:
+        if host not in allowed_hosts(port):
             raise WebError("只允许本地浏览器访问。", 403)
         origin = self.headers.get("Origin")
         if origin and origin != "http://" + host:
@@ -766,11 +787,12 @@ def main():
     _load_env_file()
     app = WebApp()
     try:
-        server = WebServer(("127.0.0.1", args.port), app)
+        host = web_bind_host()
+        server = WebServer((host, args.port), app)
     except OSError:
         app.close()
         raise
-    print(f"mawoagent Web → http://127.0.0.1:{args.port}\n按 Ctrl+C 停止；模型配置沿用项目 .env。")
+    print(f"mawoagent Web → http://{host if host != '0.0.0.0' else '127.0.0.1'}:{args.port}\n按 Ctrl+C 停止；模型配置沿用项目 .env。")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

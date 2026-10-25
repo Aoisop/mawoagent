@@ -15,7 +15,7 @@ import asyncio
 import os
 import signal
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +29,7 @@ class ExecResult:
     duration_ms: int = 0
     backend: str = "local"
     error: str = ""
+    changed: list[str] = field(default_factory=list)
 
 
 class ExecutionBackend:
@@ -259,23 +260,94 @@ class DockerBackend(ExecutionBackend):
             pass
 
 
+_COPY_IGNORE = (".git", ".hg", ".mawoagent", "node_modules", "__pycache__", ".venv", "venv", "dist", "build")
+
+
+def _relative_files(root: Path) -> dict[str, str]:
+    """Map each file to a digest, ignoring paths that are never copied."""
+
+    import hashlib
+
+    digests: dict[str, str] = {}
+    for path in root.rglob("*"):
+        if not path.is_file() or any(part in _COPY_IGNORE for part in path.relative_to(root).parts):
+            continue
+        digests[path.relative_to(root).as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return digests
+
+
+def _changed_files(before: dict[str, str], after: dict[str, str]) -> list[str]:
+    changed = [f"A {path}" for path in sorted(set(after) - set(before))]
+    changed += [f"D {path}" for path in sorted(set(before) - set(after))]
+    changed += [f"M {path}" for path in sorted(set(before) & set(after)) if before[path] != after[path]]
+    return changed
+
+
+class CopyingBackend(ExecutionBackend):
+    """Runs the command against a throwaway copy of the workspace.
+
+    The real workspace is never touched; ``changed`` reports what the command
+    would have done. This is the "independent copy" mode T11 asks for: it makes
+    a command previewable instead of immediately destructive.
+    """
+
+    name = "copy"
+
+    def __init__(self, inner: ExecutionBackend):
+        self.inner = inner
+
+    async def run(
+        self,
+        command: str,
+        *,
+        timeout_s: float,
+        cwd: Path | None = None,
+        env: dict[str, str] | None = None,
+    ) -> ExecResult:
+        import shutil
+        import tempfile
+
+        source = Path(cwd or Path.cwd()).resolve()
+        if not source.is_dir():
+            return ExecResult(returncode=None, error=f"not a directory: {source}", backend=self.name)
+
+        before = _relative_files(source)
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "workspace"
+            shutil.copytree(source, target, ignore=shutil.ignore_patterns(*_COPY_IGNORE))
+            result = await self.inner.run(command, timeout_s=timeout_s, cwd=target, env=env)
+            result.changed = _changed_files(before, _relative_files(target))
+            result.backend = self.name
+            return result
+
+
 _BACKENDS: dict[str, ExecutionBackend] = {}
 
 
 def get_backend(kind: str | None = None) -> ExecutionBackend:
-    """Return the configured backend; ``MAWOAGENT_SANDBOX`` selects it."""
+    """Return the configured backend.
+
+    ``MAWOAGENT_SANDBOX`` picks local or docker; ``MAWOAGENT_SANDBOX_MODE=copy``
+    wraps it so commands run against a copy and only report their effect.
+    """
 
     name = (kind or os.environ.get("MAWOAGENT_SANDBOX") or "local").strip().lower()
-    backend = _BACKENDS.get(name)
+    mode = (os.environ.get("MAWOAGENT_SANDBOX_MODE") or "direct").strip().lower()
+    if mode not in {"direct", "copy"}:
+        raise ValueError(f"unknown sandbox mode: {mode}")
+
+    key = f"{name}:{mode}"
+    backend = _BACKENDS.get(key)
     if backend is None:
         if name == "local":
-            backend = LocalBackend()
+            base: ExecutionBackend = LocalBackend()
         elif name == "docker":
-            backend = DockerBackend(
+            base = DockerBackend(
                 image=os.environ.get("MAWOAGENT_SANDBOX_IMAGE", DockerBackend.image),
                 user=os.environ.get("MAWOAGENT_SANDBOX_USER") or None,
             )
         else:
             raise ValueError(f"unknown execution backend: {name}")
-        _BACKENDS[name] = backend
+        backend = CopyingBackend(base) if mode == "copy" else base
+        _BACKENDS[key] = backend
     return backend
