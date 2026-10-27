@@ -195,6 +195,10 @@ cython_debug/
 .task_outputs/
 .tasks/
 .teams/
+.mawoagent/audit.jsonl
+.mawoagent/audit.jsonl.1
+.playwright-mcp/
+.workbuddy/
 .mawoagent/skill-evolution/
 .mawoagent/folding-eval/
 .mawoagent/repo-index.json
