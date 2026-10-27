@@ -197,4 +197,76 @@ tool_definitions: list[ToolDef] = [
             "required": ["query"],
         },
     },
+    # ─── Memory tools (I6 / T17) ──────────────────────────────────────────
+    {
+        "name": "memory_save",
+        "description": (
+            "Save a durable memory about the user, their preferences, or this project. "
+            "Always state where the content came from: source=user only when the user actually said it, "
+            "source=repo when it is verifiable in the code or docs, source=inference when you worked it out. "
+            "Inferences are read back later as if they were facts, so label them honestly."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Short name, unique enough to identify the memory later"},
+                "description": {"type": "string", "description": "One line describing when this memory is useful"},
+                "type": {
+                    "type": "string",
+                    "enum": ["user", "feedback", "project", "reference"],
+                    "description": "user: preferences and background; feedback: a correction with why it matters; project: goals and decisions; reference: pointers to external resources",
+                },
+                "content": {"type": "string", "description": "The memory itself"},
+                "source": {
+                    "type": "string",
+                    "enum": ["user", "repo", "inference"],
+                    "description": "Where this came from. Defaults to user only if the user stated it directly.",
+                },
+                "scope": {
+                    "type": "string",
+                    "enum": ["project", "global"],
+                    "description": "project (default) applies to this workspace; global follows the user everywhere",
+                },
+            },
+            "required": ["name", "description", "type", "content"],
+        },
+    },
+    {
+        "name": "memory_search",
+        "description": "Search saved memories by keyword. Matches names, descriptions and bodies; newest first.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Keyword to look for"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 20, "description": "Maximum results (default: 10)"},
+                "include_archived": {"type": "boolean", "description": "Also search memories that were archived"},
+            },
+            "required": ["query"],
+        },
+    },
+    {
+        "name": "memory_archive",
+        "description": (
+            "Archive a memory: it stops appearing in the index and in recall, but stays on disk and can be "
+            "restored. Prefer this over deleting when a memory is stale or was wrong."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filename": {"type": "string", "description": "The memory file to archive, as shown in the index"},
+            },
+            "required": ["filename"],
+        },
+    },
+    {
+        "name": "memory_restore",
+        "description": "Restore an archived memory back into the active set.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "filename": {"type": "string", "description": "The archived memory file to restore"},
+            },
+            "required": ["filename"],
+        },
+    },
 ]

@@ -943,6 +943,66 @@ def _check_file_write_state(name: str, inp: ToolInput, read_file_state: dict[str
     return None
 
 
+def _memory_save(inp: ToolInput) -> str:
+    from .memory import save_memory
+
+    try:
+        filename = save_memory(
+            inp["name"],
+            inp.get("description", ""),
+            inp["type"],
+            inp["content"],
+            source=inp.get("source", "user"),
+            scope=inp.get("scope", "project"),
+        )
+    except (ValueError, OSError) as exc:
+        return f"Error: {exc}"
+    return f"Saved memory {filename} (source={inp.get('source', 'user')})."
+
+
+def _memory_search(inp: ToolInput) -> str:
+    from .memory import search_memories
+
+    try:
+        hits = search_memories(
+            inp["query"],
+            limit=int(inp.get("limit", 10)),
+            include_archived=bool(inp.get("include_archived", False)),
+        )
+    except (ValueError, OSError) as exc:
+        return f"Error: {exc}"
+    if not hits:
+        return "No matching memories."
+    lines = []
+    for entry in hits:
+        marker = " (archived)" if entry.archived else ""
+        lines.append(
+            f"{entry.filename} [{entry.type}/{entry.source}, {entry.scope}]{marker}: "
+            f"{entry.name} — {entry.description}"
+        )
+    return "\n".join(lines)
+
+
+def _memory_archive(inp: ToolInput) -> str:
+    from .memory import archive_memory
+
+    try:
+        moved = archive_memory(inp["filename"])
+    except (ValueError, OSError) as exc:
+        return f"Error: {exc}"
+    return f"Archived {inp['filename']}." if moved else f"No active memory named {inp['filename']}."
+
+
+def _memory_restore(inp: ToolInput) -> str:
+    from .memory import restore_memory
+
+    try:
+        moved = restore_memory(inp["filename"])
+    except (ValueError, OSError) as exc:
+        return f"Error: {exc}"
+    return f"Restored {inp['filename']}." if moved else f"No archived memory named {inp['filename']}."
+
+
 async def execute_tool(
     name: str, inp: ToolInput, read_file_state: dict[str, FileVersion] | None = None, *,
     truncate_result: bool = True, permission_mode: PermissionMode = "default",
@@ -984,6 +1044,10 @@ async def execute_tool(
             "grep_search": _grep_search,
             "skill_evolve": _skill_evolve,
             "skill_create": _skill_create,
+            "memory_save": _memory_save,
+            "memory_search": _memory_search,
+            "memory_archive": _memory_archive,
+            "memory_restore": _memory_restore,
         }
         handler = handlers.get(name)
         if handler is None:

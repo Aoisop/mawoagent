@@ -29,22 +29,33 @@ SideQueryFn = Callable[[str, str], Awaitable[str]]
 
 
 VALID_TYPES = {"user", "feedback", "project", "reference"}
+# Where a memory came from. "inference" is what the model worked out on its own;
+# it must stay distinguishable from what the user actually said, otherwise a
+# wrong guess gets promoted to a fact by being read back later.
+VALID_SOURCES = {"user", "repo", "inference"}
+VALID_SCOPES = {"project", "global"}
 MAX_INDEX_LINES = 200       # MEMORY.md 注入 system prompt 前最多保留的行数。
 MAX_INDEX_BYTES = 25000     # MEMORY.md 注入 system prompt 前最多保留的字节数。
+MAX_INDEX_ENTRIES = 40      # 常驻索引的条目上限：再多就不是"常驻"了。
+ARCHIVE_DIRNAME = "archive"
 _logger = logging.getLogger(__name__)
 
 
 class MemoryEntry:
     """完整 memory 条目，用于 /memory 列表和 CRUD 操作。"""
 
-    __slots__ = ("name", "description", "type", "filename", "content")
+    __slots__ = ("name", "description", "type", "filename", "content", "source", "scope", "archived")
 
-    def __init__(self, name: str, description: str, type: str, filename: str, content: str):
+    def __init__(self, name: str, description: str, type: str, filename: str, content: str,
+                 source: str = "user", scope: str = "project", archived: bool = False):
         self.name = name
         self.description = description
         self.type = type
         self.filename = filename
         self.content = content
+        self.source = source
+        self.scope = scope
+        self.archived = archived
 
 
 
@@ -78,7 +89,38 @@ def _slugify(text: str) -> str:
 
 
 
-def list_memories() -> list[MemoryEntry]:
+def archive_dir() -> Path:
+    """Archived memories live beside the active ones and stay readable."""
+
+    directory = get_memory_dir() / ARCHIVE_DIRNAME
+    directory.mkdir(parents=True, exist_ok=True)
+    return directory
+
+
+def _parse_entry(path: Path, *, archived: bool) -> MemoryEntry | None:
+    result = parse_frontmatter(path.read_text(encoding="utf-8"))
+    meta = result.meta
+    # 没有 name/type 的文件不算合法 memory。
+    if not meta.get("name") or not meta.get("type"):
+        return None
+    # type 不合法时降级为 project，避免坏文件中断列表。
+    raw_type = as_text(meta["type"])
+    entry_type = raw_type if raw_type in VALID_TYPES else "project"
+    source = as_text(meta.get("source"))
+    scope = as_text(meta.get("scope"))
+    return MemoryEntry(
+        name=as_text(meta["name"]),
+        description=as_text(meta.get("description")),
+        type=entry_type,
+        filename=path.name,
+        content=result.body,
+        source=source if source in VALID_SOURCES else "user",
+        scope=scope if scope in VALID_SCOPES else "project",
+        archived=archived,
+    )
+
+
+def list_memories(include_archived: bool = False) -> list[MemoryEntry]:
     """读取当前项目所有 memory 文件，并按修改时间倒序返回。"""
     d = get_memory_dir()
     entries: list[tuple[float, MemoryEntry]] = []
@@ -88,51 +130,107 @@ def list_memories() -> list[MemoryEntry]:
             continue
         try:
             mtime = f.stat().st_mtime
-            result = parse_frontmatter(f.read_text(encoding="utf-8"))
-            meta = result.meta
-            # 没有 name/type 的文件不算合法 memory。
-            if not meta.get("name") or not meta.get("type"):
-                continue
-            # type 不合法时降级为 project，避免坏文件中断列表。
-            raw_type = as_text(meta["type"])
-            t = raw_type if raw_type in VALID_TYPES else "project"
-            entry = MemoryEntry(
-                name=as_text(meta["name"]),
-                description=as_text(meta.get("description")),
-                type=t,
-                filename=f.name,
-                content=result.body,
-            )
-            entries.append((mtime, entry))
+            entry = _parse_entry(f, archived=False)
+            if entry is not None:
+                entries.append((mtime, entry))
         except (OSError, UnicodeError):
             _logger.warning("Skipping unreadable memory %s", f, exc_info=True)
+    if include_archived:
+        for f in sorted((d / ARCHIVE_DIRNAME).glob("*.md")) if (d / ARCHIVE_DIRNAME).exists() else []:
+            try:
+                mtime = f.stat().st_mtime
+                entry = _parse_entry(f, archived=True)
+                if entry is not None:
+                    entries.append((mtime, entry))
+            except (OSError, UnicodeError):
+                _logger.warning("Skipping unreadable archived memory %s", f, exc_info=True)
     # 最近修改的记忆排在前面，方便 /memory 展示。
     entries.sort(key=lambda item: item[0], reverse=True)
     return [entry for _, entry in entries]
 
 
-def save_memory(name: str, description: str, type: str, content: str) -> str:
+def save_memory(name: str, description: str, type: str, content: str,
+                source: str = "user", scope: str = "project") -> str:
     """保存一条 memory，并刷新 MEMORY.md 索引。"""
     if type not in VALID_TYPES:
         raise ValueError("invalid memory type")
+    if source not in VALID_SOURCES:
+        raise ValueError(f"invalid memory source: {source}")
+    if scope not in VALID_SCOPES:
+        raise ValueError(f"invalid memory scope: {scope}")
     d = get_memory_dir()
     filename = f"{type}_{_slugify(name)}.md"
-    text = format_frontmatter({"name": name, "description": description, "type": type}, content)
+    text = format_frontmatter(
+        {"name": name, "description": description, "type": type, "source": source, "scope": scope},
+        content,
+    )
     with state_lock(d / "MEMORY.md"):
         atomic_write_text(d / filename, text)
         _update_memory_index()
     return filename
 
 
-def delete_memory(filename: str) -> bool:
-    """按文件名删除 memory，删除成功后刷新索引。"""
-    directory = get_memory_dir()
+def _checked_memory_path(filename: str, *, archived: bool = False) -> Path:
+    directory = archive_dir() if archived else get_memory_dir()
     filepath = (directory / filename).resolve()
     if filepath.parent != directory.resolve() or filepath.name == "MEMORY.md":
         raise ValueError("memory filename must identify a single memory inside its directory")
+    return filepath
+
+
+def archive_memory(filename: str) -> bool:
+    """Move a memory out of the index without losing it."""
+
+    source = _checked_memory_path(filename)
+    target = archive_dir() / filename
+    if target.exists():
+        raise ValueError(f"a memory named {filename} is already archived")
+    if not source.exists():
+        return False
+    with state_lock(get_memory_dir() / "MEMORY.md"):
+        source.replace(target)
+        _update_memory_index()
+    return True
+
+
+def restore_memory(filename: str) -> bool:
+    """Bring an archived memory back into the active set."""
+
+    source = _checked_memory_path(filename, archived=True)
+    if not source.exists():
+        return False
+    target = get_memory_dir() / filename
+    if target.exists():
+        raise ValueError(f"an active memory named {filename} already exists")
+    with state_lock(get_memory_dir() / "MEMORY.md"):
+        source.replace(target)
+        _update_memory_index()
+    return True
+
+
+def search_memories(query: str, limit: int = 10, include_archived: bool = False) -> list[MemoryEntry]:
+    """Case-insensitive substring match over name, description and body."""
+
+    needle = query.strip().lower()
+    if not needle:
+        return []
+    hits: list[MemoryEntry] = []
+    for entry in list_memories(include_archived=include_archived):
+        haystack = f"{entry.name}\n{entry.description}\n{entry.content}".lower()
+        if needle in haystack:
+            hits.append(entry)
+            if len(hits) >= max(1, limit):
+                break
+    return hits
+
+
+def delete_memory(filename: str) -> bool:
+    """按文件名删除 memory，删除成功后刷新索引。"""
+    directory = get_memory_dir()
+    filepath = _checked_memory_path(filename)
+    if not filepath.exists():
+        return False
     with state_lock(directory / "MEMORY.md"):
-        if not filepath.exists():
-            return False
         filepath.unlink()
         _update_memory_index()
     return True
@@ -144,8 +242,12 @@ def _update_memory_index() -> None:
     """根据当前 memory 文件重新生成 MEMORY.md。"""
     memories = list_memories()
     lines = ["# Memory Index", ""]
-    for m in memories:
-        lines.append(f"- **[{m.name}]({m.filename})** ({m.type}) — {m.description}")
+    for m in memories[:MAX_INDEX_ENTRIES]:
+        # Source and scope stay visible in the index: "the user said this" and
+        # "the model inferred this" must not look identical at recall time.
+        lines.append(f"- **[{m.name}]({m.filename})** ({m.type}/{m.source}, {m.scope}) — {m.description}")
+    if len(memories) > MAX_INDEX_ENTRIES:
+        lines.append(f"- ... {len(memories) - MAX_INDEX_ENTRIES} more not listed; search with memory_search")
     atomic_write_text(_get_index_path(), "\n".join(lines))
 
 
@@ -464,21 +566,23 @@ You have a persistent, file-based memory system at `{memory_dir}`.
 - **reference**: Pointers to external resources (URLs, tools, dashboards)
 
 ## How to Save Memories
-Use the write_file tool to create a memory file with YAML frontmatter:
+Use the `memory_save` tool. Do not write memory files with `write_file`: the tool
+records the metadata the index depends on.
 
-```markdown
----
-name: memory name
-description: one-line description
-type: user|feedback|project|reference
----
-Memory content here.
+```
+memory_save(name, description, type, content, source, scope)
 ```
 
-Save to: `{memory_dir}/`
-Filename format: `{{type}}_{{slugified_name}}.md`
+- `type`: user | feedback | project | reference
+- `source`: **user** when the user said it, **repo** when it is verifiable in the
+  code or docs, **inference** when you concluded it yourself. This is not
+  decoration: an inference is read back later as if it were a fact, so a wrong
+  guess becomes a durable one.
+- `scope`: project (default) or global
 
-The MEMORY.md index is auto-updated when you write to the memory directory — do NOT update it manually.
+Search with `memory_search`, retire a memory with `memory_archive` (recoverable),
+and bring it back with `memory_restore`. The MEMORY.md index is regenerated
+automatically — do NOT update it manually.
 
 ## What NOT to Save
 - Code patterns or architecture (read the code instead)
