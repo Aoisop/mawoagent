@@ -460,6 +460,11 @@ class WebApp:
 
     async def dispatch(self, method, path, body=None):
         body = body or {}
+        # Query parameters are only used by read-only views; strip them before
+        # matching so "audit?limit=10" is still the audit route.
+        parsed_query = parse_qs(urlsplit(path).query)
+        if parsed_query:
+            path = urlsplit(path).path
         if path == "/api/config" and method == "GET":
             return self.config
         if path == "/api/sessions":
@@ -506,6 +511,16 @@ class WebApp:
         action = parts[3] if len(parts) == 4 else ""
         if method == "GET" and not action:
             return view.snapshot
+        if method == "GET" and action == "audit":
+            # Read-only view of the tool-call trail; no hook can be installed
+            # from here, which is what keeps this an audit surface.
+            from .audit import read_events
+            limit = 50
+            try:
+                limit = max(1, min(500, int(parsed_query.get("limit", ["50"])[0])))
+            except (TypeError, ValueError):
+                pass
+            return {"events": read_events(self.workspace.root, limit=limit)}
         if method == "GET" and action == "diff":
             from .snapshots import build_diff, describe_turn, latest_turn
             turn = latest_turn(view.id, self.workspace.root)

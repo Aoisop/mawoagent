@@ -406,6 +406,28 @@ class WebEndpointTests(unittest.TestCase):
             self.assertEqual(undone["removed"], ["a.txt"])
             self.assertFalse((root / "a.txt").exists())
 
+    def test_audit_endpoint_returns_recent_events(self) -> None:
+        from agents.audit import AuditLog, CallRecord, audit_path
+        from agents.web import WebApp
+        from agents.workspace import WorkspaceContext
+
+        app = WebApp(options={"api_key": None, "model": "test"})
+        self.addCleanup(app.close)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            app.workspace = WorkspaceContext(root=root)
+            session = app.call(app.dispatch("POST", "/api/sessions", {}))["id"]
+
+            log = AuditLog(audit_path(root))
+            record = CallRecord(log, session_id=session, tool="read_file", arguments={"file_path": "a.txt"})
+            record.start("allow")
+            record.finish()
+
+            payload = app.call(app.dispatch("GET", f"/api/sessions/{session}/audit?limit=10"))
+            self.assertEqual(payload["events"][0]["tool"], "read_file")
+            self.assertEqual(payload["events"][0]["phase"], "end")
+
 
 if __name__ == "__main__":
     unittest.main()
