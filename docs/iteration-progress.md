@@ -9,9 +9,9 @@
 | 指标 | 数值 |
 | --- | --- |
 | 计划任务 | 21（T01–T21） |
-| 已交付 | 17（T01–T08、T10–T15、T17、T18） |
+| 已交付 | 18（T01–T08、T10–T18） |
 | 进行中 | 0 |
-| 未开始 | 4 |
+| 未开始 | 3 |
 | 迭代完成 | 4 / 8（I0、I1、I2、I3） |
 | 首版范围 I0–I2 | 7 / 7 任务（完成） |
 | PR 完成 | 6 / 6（PR-01–PR-06） |
@@ -48,7 +48,7 @@
 | T13 浏览器 MCP（Playwright） | I5 | ✅ | `.mcp.json`、`agents/mcp_client.py`、`tests/test_mcp_playwright.py` | 版本固定 `@playwright/mcp@0.0.83`；独立 profile；本地 HTTP 页面导航并读取快照；同一 profile 连续启动两次证明退出无残留。集成测试由 `MAWO_PLAYWRIGHT_E2E=1` 开关，已在 Windows + Edge 实跑通过 |
 | T14 远程 MCP 传输 | I5 | ✅ | `agents/mcp_http.py`、`agents/mcp_client.py` | 协议版本固定并校验；JSON 与 SSE 两种响应；`Mcp-Session-Id` 建立后回传；`tools/list` 跟随 nextCursor 分页；认证只从环境变量取引用；重定向限 3 次且限同源；取消时发送 `notifications/cancelled`；401 明确说明 OAuth 未实现 |
 | T15 工具结果类型化 | I5 | ✅ | `agents/tool_content.py`、`agents/mcp_client.py`、`agents/storage.py` | 文本结果逐字兼容；图片落盘为文件并只回传路径与大小；音频与资源链接保留类型；模型不支持时回传明确的能力行，base64 永不进入正文 |
-| T16 执行型评测入口 | I6 | ⬜ | — | `online_skill_eval.py` 目前是文本回放 |
+| T16 执行型评测入口 | I6 | ✅ | `agents/exec_eval.py`、`agents/online_skill_eval.py` | 真跑 fixture 任务并用自己的 check 判定；baseline 与 forced 两个变体同任务对照；自然检索与强制加载分开测量；证据门槛为任务数 + 同任务集 + 增益阈值，不足即 `insufficient_evidence`；文本回放保留；side query 成本按 generation/judge/mutation 分项 |
 | T17 记忆管理工具 | I6 | ✅ | `agents/memory.py`、`agents/tool_schemas.py`、`agents/tools.py` | `memory_save`/`memory_search`/`memory_archive`/`memory_restore`；来源（user/repo/inference）与作用域写入 frontmatter 并显示在索引中；归档目录可恢复且不参与召回；常驻索引按条数、行数、字节三重上限 |
 | T18 审计钩子 | I6 | ✅ | `agents/audit.py`、`agents/tool_runtime.py`、`agents/web.py` | 每次工具调用写 start/end 两条 JSONL（未结束即崩溃的形态可见）；参数脱敏并截断；订阅者只拿到冻结事件、返回值被忽略；日志不可写或订阅者抛错都不影响调用；`GET /api/sessions/<id>/audit` 只读查看 |
 | T19 JSONL 输出与退出码 | I7 | ⬜ | — | `main.py` 无 JSONL／output-format 选项 |
@@ -68,7 +68,7 @@
 
 ## 下一步
 
-**I0–I4 已全部交付**（容器内行为仍需在有 Docker 的机器上验证）。**I5 已全部交付**。I6 已交付只读审计与记忆工具：留痕可诊断，记忆有来源与归档。 I3 的 T09 提供了可运行的评测入口，但 fixture 目前仍是 5 个（计划要求 20–30 个），且真实对照需要模型密钥，不属于 CI 范围。下一步是 I4 隔离执行，它是无人值守写入的前置条件。
+**I0–I4 已全部交付**（容器内行为仍需在有 Docker 的机器上验证）。**I5–I6 已全部交付**：审计、记忆、执行型评测均已就位。下一步 I7：输出格式、实例隔离与调度。 I3 的 T09 提供了可运行的评测入口，但 fixture 目前仍是 5 个（计划要求 20–30 个），且真实对照需要模型密钥，不属于 CI 范围。下一步是 I4 隔离执行，它是无人值守写入的前置条件。
 
 仍未闭合的两处界面/接口落差：T07 的 Web 端只有接口、没有按钮；授权卡片里的 diff 是纯文本，没有按增删着色。
 
@@ -85,7 +85,7 @@
 
 | 口径 | 结果 |
 | --- | --- |
-| 完整套件 | 488 个用例，`OK (skipped=9)`，约 240 秒 |
+| 完整套件 | 508 个用例，`OK (skipped=9)`，约 240 秒 |
 | CI 矩阵 | 3 个平台 × Python 3.11/3.12 加前端作业，最近一次（run #21）全部通过 |
 | 前端 | `node --check web/app.js` 通过；30 个单测通过 |
 | 跳过原因 | 2 个符号链接用例（Windows 需开发者模式）；其余为既有平台条件跳过 |
