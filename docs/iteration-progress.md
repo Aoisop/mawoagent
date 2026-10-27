@@ -9,9 +9,9 @@
 | 指标 | 数值 |
 | --- | --- |
 | 计划任务 | 21（T01–T21） |
-| 已交付 | 14（T01–T08、T10–T12、T14、T15） |
+| 已交付 | 15（T01–T08、T10–T15） |
 | 进行中 | 0 |
-| 未开始 | 7 |
+| 未开始 | 6 |
 | 迭代完成 | 4 / 8（I0、I1、I2、I3） |
 | 首版范围 I0–I2 | 7 / 7 任务（完成） |
 | PR 完成 | 6 / 6（PR-01–PR-06） |
@@ -25,7 +25,7 @@
 | I2 文件快照与撤销 | P0 | 2 | 2 | ✅ 完成 |
 | I3 代码理解与任务对照 | P1 | 3 | 3 | ✅ 完成 |
 | I4 隔离执行 | P1 | 2 | 2 | ✅ 完成（容器内行为待真实 Docker 验证） |
-| I5 浏览器与远程工具 | P1 | 3 | 2 | 🚧 进行中（缺 T13） |
+| I5 浏览器与远程工具 | P1 | 3 | 3 | ✅ 完成 |
 | I6 技能学习与记忆闭环 | P2 | 3 | 0 | 未开始 |
 | I7 自动化与受控并发 | P2 | 3 | 0 | 未开始 |
 
@@ -45,7 +45,7 @@
 | T10 Skill YAML frontmatter | I3 | ✅ | `agents/frontmatter.py`、`agents/skills.py`、`agents/memory.py` | 无第三方依赖的 YAML 子集：引号/布尔/null/数字、块与流式列表、缩进嵌套、字面量与折叠块标量、注释；旧格式回退；`format_frontmatter` 可精确回读 |
 | T11 执行后端与 Docker 入口 | I4 | ✅ | `agents/sandbox.py`、`Dockerfile.sandbox`、`agents/tools.py` | 统一 `ExecutionBackend.run()`/`ExecResult`；本地后端复刻原行为（同 shell、同会话、同进程树清理）；Docker 后端只挂工作区、`--network none`、内存/CPU/PID 上限、`no-new-privileges`、超时按容器名清理；`MAWOAGENT_SANDBOX` 选择后端。**未验证**：无 Docker 环境，容器内行为未实测；「独立副本模式」未实现 |
 | T12 容器状态映射与 Web 接入 | I4 | ✅ | `Dockerfile`、`agents/web.py`、`tests/test_web_container.py` | 镜像补 `COPY web` 与 `EXPOSE`；监听地址可用 `MAWOAGENT_WEB_HOST` 打开；发布端口通过 `MAWOAGENT_WEB_ALLOWED_HOSTS` 显式放行，Host/Origin/CSRF 校验未放宽 |
-| T13 浏览器 MCP（Playwright） | I5 | ⬜ | — | `.mcp.json` 有配置，但 Windows 上必然启动失败（见已知缺陷） |
+| T13 浏览器 MCP（Playwright） | I5 | ✅ | `.mcp.json`、`agents/mcp_client.py`、`tests/test_mcp_playwright.py` | 版本固定 `@playwright/mcp@0.0.83`；独立 profile；本地 HTTP 页面导航并读取快照；同一 profile 连续启动两次证明退出无残留。集成测试由 `MAWO_PLAYWRIGHT_E2E=1` 开关，已在 Windows + Edge 实跑通过 |
 | T14 远程 MCP 传输 | I5 | ✅ | `agents/mcp_http.py`、`agents/mcp_client.py` | 协议版本固定并校验；JSON 与 SSE 两种响应；`Mcp-Session-Id` 建立后回传；`tools/list` 跟随 nextCursor 分页；认证只从环境变量取引用；重定向限 3 次且限同源；取消时发送 `notifications/cancelled`；401 明确说明 OAuth 未实现 |
 | T15 工具结果类型化 | I5 | ✅ | `agents/tool_content.py`、`agents/mcp_client.py`、`agents/storage.py` | 文本结果逐字兼容；图片落盘为文件并只回传路径与大小；音频与资源链接保留类型；模型不支持时回传明确的能力行，base64 永不进入正文 |
 | T16 执行型评测入口 | I6 | ⬜ | — | `online_skill_eval.py` 目前是文本回放 |
@@ -68,7 +68,7 @@
 
 ## 下一步
 
-**I0–I4 已全部交付**（容器内行为仍需在有 Docker 的机器上验证）。I5 已交付类型化工具结果与远程 MCP 传输：非文本内容不再以 base64 进入对话，远程服务器可按同一 HTTP 传输接入。 I3 的 T09 提供了可运行的评测入口，但 fixture 目前仍是 5 个（计划要求 20–30 个），且真实对照需要模型密钥，不属于 CI 范围。下一步是 I4 隔离执行，它是无人值守写入的前置条件。
+**I0–I4 已全部交付**（容器内行为仍需在有 Docker 的机器上验证）。**I5 已全部交付**：类型化工具结果、远程 MCP 传输、Playwright 浏览器端到端。下一步 I6：学习与自动化。 I3 的 T09 提供了可运行的评测入口，但 fixture 目前仍是 5 个（计划要求 20–30 个），且真实对照需要模型密钥，不属于 CI 范围。下一步是 I4 隔离执行，它是无人值守写入的前置条件。
 
 仍未闭合的两处界面/接口落差：T07 的 Web 端只有接口、没有按钮；授权卡片里的 diff 是纯文本，没有按增删着色。
 
@@ -76,7 +76,7 @@
 
 | 问题 | 影响 | 涉及任务 |
 | --- | --- | --- |
-| `.mcp.json` 使用 `npx`，Windows 上实际是 `npx.cmd`，子进程启动报 `WinError 2` | 两个 MCP 服务在 Windows 上从未成功启动；此前还会先弹授权再失败 | T13；I4 的"安装缺失有清晰错误" |
+| ~~`.mcp.json` 使用 `npx`，Windows 上实际是 `npx.cmd`，子进程启动报 `WinError 2`~~ | ✅ 已在 T13 修复：命令经 `shutil.which` 解析，`.cmd`/`.bat` 走 `cmd /c`；退出时用 `taskkill /T /F` 杀整棵进程树 | T13 |
 | ~~完整测试偶发在解释器退出阶段崩溃~~ | 已修复（`cbb635a`）：请求处理线程在退出阶段向 stderr 打异常栈触发致命锁错误；改为吞掉常规断连异常 | 原关联 I7／T19 |
 | `test_multiprocess_usage_updates_do_not_lose_counts` 在完整套件中偶发 `PermissionError` | Windows 上多进程与临时目录清理竞争；单独运行 3/3 通过，尚未修复 | 与 I7／T20 的实例隔离相关 |
 | 无确认通道时依赖阻塞式 `input()` | 已在 `259641e` 中改为拒绝；仍需在 T19 统一退出与拒绝语义 | T19 |
@@ -85,7 +85,7 @@
 
 | 口径 | 结果 |
 | --- | --- |
-| 完整套件 | 442 个用例，`OK (skipped=8)`，约 240 秒 |
+| 完整套件 | 446 个用例，`OK (skipped=9)`，约 240 秒 |
 | CI 矩阵 | 3 个平台 × Python 3.11/3.12 加前端作业，最近一次（run #21）全部通过 |
 | 前端 | `node --check web/app.js` 通过；30 个单测通过 |
 | 跳过原因 | 2 个符号链接用例（Windows 需开发者模式）；其余为既有平台条件跳过 |

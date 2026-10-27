@@ -32,6 +32,7 @@ import asyncio
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import signal
 from pathlib import Path
@@ -86,6 +87,22 @@ class BorrowedMcpManager:
         pass
 
 
+def _resolve_command(command: str, args: list[str]) -> tuple[str, list[str]]:
+    """Resolve a configured command to something CreateProcess can start.
+
+    On Windows ``npx`` is ``npx.cmd``: ``create_subprocess_exec`` does not apply
+    PATHEXT, so the plain name raises FileNotFoundError and the server never
+    starts. Batch shims also need ``cmd /c`` to be executed at all.
+    """
+
+    resolved = shutil.which(command) if command else None
+    if resolved is None:
+        raise FileNotFoundError(f"MCP command not found: {command}")
+    if os.name == "nt" and resolved.lower().endswith((".cmd", ".bat")):
+        return os.environ.get("ComSpec", "cmd.exe"), ["/c", resolved, *args]
+    return resolved, list(args)
+
+
 class McpConnection:
     """管理单个 MCP Server 子进程，以及和它之间的 JSON-RPC 通信。"""
 
@@ -134,12 +151,13 @@ class McpConnection:
 
         # 子进程环境变量 = 当前进程环境变量 + 配置里声明的额外变量。
         merged_env = {**os.environ, **self.env}
+        command, args = _resolve_command(self.command or "", self.args)
         # 使用 stdio 模式启动 MCP Server：
         # - stdin：客户端向 Server 写 JSON-RPC 请求。
         # - stdout：Server 向客户端返回 JSON-RPC 响应。
         # - stderr：保留错误输出管道，避免 Server 继承当前终端输出。
         self._process = await asyncio.create_subprocess_exec(
-            self.command, *self.args,
+            command, *args,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
@@ -373,13 +391,25 @@ class McpConnection:
             try:
                 # 直接杀掉子进程，确保外部 MCP Server 不继续残留。
                 if getattr(self._process, "stdin", None):
-                    self._process.stdin.close()
+                    try:
+                        self._process.stdin.close()
+                    except (RuntimeError, ValueError):
+                        # The owning loop is gone; the kill below still applies.
+                        pass
                 if hasattr(self._process, "kill"):
                     if os.name != "nt":
                         os.killpg(self._process.pid, signal.SIGKILL)
                     else:
-                        self._process.kill()
-            except ProcessLookupError:
+                        # kill() only stops cmd.exe; node and the browser it
+                        # spawned would keep running.
+                        subprocess.run(
+                            ["taskkill", "/PID", str(self._process.pid), "/T", "/F"],
+                            stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL,
+                            timeout=10,
+                            check=False,
+                        )
+            except (ProcessLookupError, subprocess.TimeoutExpired):
                 # 进程已经退出时 kill 可能抛出该异常，忽略即可。
                 pass
             self._process = None

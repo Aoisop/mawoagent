@@ -52,5 +52,39 @@ class McpToolTimeoutTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(connection._pending, {})
 
 
+class CommandResolutionTests(unittest.TestCase):
+    def test_missing_command_is_reported_clearly(self) -> None:
+        from agents.mcp_client import _resolve_command
+
+        with self.assertRaises(FileNotFoundError) as caught:
+            _resolve_command("definitely-not-a-real-binary-xyz", [])
+        self.assertIn("not found", str(caught.exception))
+
+    def test_a_real_command_resolves_to_its_path(self) -> None:
+        import sys
+
+        from agents.mcp_client import _resolve_command
+
+        command, args = _resolve_command(sys.executable, ["-c", "print(1)"])
+        self.assertTrue(command)
+        self.assertEqual(args, ["-c", "print(1)"])
+
+    @unittest.skipUnless(__import__("os").name == "nt", "batch shims exist only on Windows")
+    def test_batch_shim_is_started_through_cmd(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        from agents.mcp_client import _resolve_command
+
+        with tempfile.TemporaryDirectory() as tmp:
+            shim = Path(tmp) / "fake-tool.cmd"
+            shim.write_text("@echo off\r\necho hi\r\n", encoding="utf-8")
+            command, args = _resolve_command(str(shim), ["--version"])
+
+        self.assertTrue(command.lower().endswith("cmd.exe"))
+        self.assertEqual(args[:2], ["/c", str(shim)])
+        self.assertEqual(args[2:], ["--version"])
+
+
 if __name__ == "__main__":
     unittest.main()
