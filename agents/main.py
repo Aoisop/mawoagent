@@ -70,6 +70,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--context-window", type=int, default=None, help="Model context capacity in tokens")
     parser.add_argument("--no-folding", action="store_true", help="Disable full session folding")
     parser.add_argument("--fold-threshold", type=float, default=0.70, help="Auto-fold at this fraction of the context window")
+    parser.add_argument("--output-format", choices=("text", "json", "jsonl"), default="text",
+                        help="stdout format for one-shot runs (default: text)")
+    parser.add_argument("--json", action="store_true", help="Shorthand for --output-format jsonl")
     parser.add_argument("--help", "-h", action="store_true", help="Show help")
     return parser.parse_args()
 
@@ -552,7 +555,16 @@ Options:
   --context-window N Model context capacity in tokens
   --no-folding        Disable full session folding
   --fold-threshold X  Auto-fold threshold (0 < X < 1, default: 0.70)
+  --output-format F   One-shot stdout: text (default), json, or jsonl
+  --json              Shorthand for --output-format jsonl
   --help, -h          Show this help
+
+Exit codes:
+  0  success                 1  error
+  2  usage                   3  budget exhausted (--max-cost / --max-turns)
+  130 cancelled (Ctrl+C)
+
+In json/jsonl mode stdout carries only records; progress and errors go to stderr.
 
 REPL commands:
   /clear              Clear conversation history
@@ -594,14 +606,33 @@ Examples:
     permission_mode = _resolve_permission_mode(args)
     api_config = _resolve_api_config(args.api_base)
 
+    from .output import EXIT_USAGE, ResultWriter
+    from . import ui
+
+    output_format = "jsonl" if args.json else args.output_format
+    writer = ResultWriter(output_format)
+    collected: list[str] = []
+    prompt = " ".join(args.prompt) if args.prompt else None
+    if output_format != "text":
+        # stdout belongs to the records; keep the human view on stderr.
+        ui.configure_stream(stderr=True)
+        ui.set_text_sink(collected.append)
+        if not prompt:
+            print_error("--output-format requires a prompt; the REPL is interactive.")
+            sys.exit(EXIT_USAGE)
+        writer.start(prompt=prompt, model=args.model or "default")
+
     # 没有可用 API key 时无法调用模型，直接提示配置方式并退出。
     if not api_config[1]:
-        print_error(
+        message = (
             "API key is required.\n"
             "  Set APIKEY (+ optional API) in .env for generic config,\n"
             "  or use ANTHROPIC_API_KEY / ANTHROPIC_BASE_URL,\n"
             "  or use OPENAI_API_KEY / OPENAI_BASE_URL."
         )
+        if output_format != "text":
+            sys.exit(writer.finish(status="error", exit_code=1, error=message))
+        print_error(message)
         sys.exit(1)
 
     # 创建主 Agent。OpenAI-compatible 和 Anthropic 原生接口使用不同的 base URL 参数名传入。
@@ -639,20 +670,39 @@ Examples:
             print_info("No previous sessions found.")
 
     # 如果命令行后面带了普通文本参数，就拼成一次性 prompt；否则进入交互式 REPL。
-    prompt = " ".join(args.prompt) if args.prompt else None
-
     if prompt:
         # One-shot mode
         # 一次性模式：执行完用户 prompt 后进程结束。
         try:
             asyncio.run(run_one_shot(agent, prompt))
-        except Exception as e:
-            print_error(str(e))
-            sys.exit(1)
+        except BaseException as exc:  # noqa: BLE001 - the exit code carries the kind
+            from .output import EXIT_CANCELLED, classify_error
+
+            usage = _usage(agent)
+            if output_format != "text":
+                sys.exit(writer.fail(exc, usage=usage))
+            if not isinstance(exc, (KeyboardInterrupt, asyncio.CancelledError)):
+                print_error(str(exc))
+            sys.exit(classify_error(exc)[1])
+        # A budget stop is reported by the agent as ordinary text, because the
+        # loop has to end cleanly; for automation it is not a success.
+        status, exit_code = ("budget_exceeded", 3) if getattr(agent, "last_finish_reason", None) == "budget_exceeded" else ("ok", 0)
+        sys.exit(writer.finish(status=status, exit_code=exit_code,
+                               text="".join(collected) if output_format != "text" else "",
+                               usage=_usage(agent)))
     else:
         # Interactive REPL
         # 交互模式：启动循环读取用户输入，直到用户退出。
         asyncio.run(run_repl(agent))
+
+
+def _usage(agent: Agent) -> dict:
+    return {
+        "input_tokens": agent.total_input_tokens,
+        "output_tokens": agent.total_output_tokens,
+        "cost_usd": round(agent._get_current_cost_usd(), 6),
+        "turns": agent.current_turns,
+    }
 
 
 if __name__ == "__main__":

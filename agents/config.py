@@ -15,12 +15,17 @@ def _clean_env(value: str | None) -> str | None:
 
 
 def load_env_file() -> None:
-    """Load the nearest .env file without replacing the process environment."""
+    """Load `.env` from the working directory only, without overriding the environment.
+
+    The implicit fallback used to search upwards from the calling file, which
+    meant running from a directory without a `.env` silently picked up the one
+    next to the installed package. Configuration should depend on where you run,
+    not where the code happens to live.
+    """
+
     env_path = find_dotenv(usecwd=True)
     if env_path:
         load_dotenv(env_path, override=False)
-    else:
-        load_dotenv(override=False)
 
 
 def _is_anthropic_compatible_base_url(base_url: str | None) -> bool:

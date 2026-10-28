@@ -14,6 +14,28 @@ from rich.table import Table
 from rich.text import Text
 
 console = Console(highlight=False)
+_stream = sys.stdout
+_text_sink = None
+
+
+def configure_stream(*, stderr: bool = False) -> None:
+    """Send all human-facing output somewhere else than stdout.
+
+    Structured output modes own stdout: a streamed assistant line mixed into a
+    JSONL stream would corrupt every record, so the UI moves to stderr instead
+    of being switched off.
+    """
+
+    global console, _stream
+    _stream = sys.stderr if stderr else sys.stdout
+    console = Console(highlight=False, stderr=stderr)
+
+
+def set_text_sink(callback) -> None:
+    """Observe assistant text without changing where it is rendered."""
+
+    global _text_sink
+    _text_sink = callback
 
 
 def _safe_print(*args, **kwargs):
@@ -31,8 +53,8 @@ def _safe_text(value: object) -> str:
 
 
 def _safe_stdout_write(text: object) -> None:
-    sys.stdout.write(_safe_text(text))
-    sys.stdout.flush()
+    _stream.write(_safe_text(text))
+    _stream.flush()
 
 
 COOKIE_ART = r"""
@@ -85,6 +107,11 @@ def print_user_prompt() -> None:
 
 
 def print_assistant_text(text: str) -> None:
+    if _text_sink is not None:
+        try:
+            _text_sink(text)
+        except Exception:  # noqa: BLE001 - an observer must not break the stream
+            pass
     _safe_stdout_write(text)
 
 

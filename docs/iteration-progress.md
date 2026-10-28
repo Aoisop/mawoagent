@@ -9,9 +9,9 @@
 | 指标 | 数值 |
 | --- | --- |
 | 计划任务 | 21（T01–T21） |
-| 已交付 | 18（T01–T08、T10–T18） |
+| 已交付 | 19（T01–T08、T10–T19） |
 | 进行中 | 0 |
-| 未开始 | 3 |
+| 未开始 | 2 |
 | 迭代完成 | 4 / 8（I0、I1、I2、I3） |
 | 首版范围 I0–I2 | 7 / 7 任务（完成） |
 | PR 完成 | 6 / 6（PR-01–PR-06） |
@@ -51,7 +51,7 @@
 | T16 执行型评测入口 | I6 | ✅ | `agents/exec_eval.py`、`agents/online_skill_eval.py` | 真跑 fixture 任务并用自己的 check 判定；baseline 与 forced 两个变体同任务对照；自然检索与强制加载分开测量；证据门槛为任务数 + 同任务集 + 增益阈值，不足即 `insufficient_evidence`；文本回放保留；side query 成本按 generation/judge/mutation 分项 |
 | T17 记忆管理工具 | I6 | ✅ | `agents/memory.py`、`agents/tool_schemas.py`、`agents/tools.py` | `memory_save`/`memory_search`/`memory_archive`/`memory_restore`；来源（user/repo/inference）与作用域写入 frontmatter 并显示在索引中；归档目录可恢复且不参与召回；常驻索引按条数、行数、字节三重上限 |
 | T18 审计钩子 | I6 | ✅ | `agents/audit.py`、`agents/tool_runtime.py`、`agents/web.py` | 每次工具调用写 start/end 两条 JSONL（未结束即崩溃的形态可见）；参数脱敏并截断；订阅者只拿到冻结事件、返回值被忽略；日志不可写或订阅者抛错都不影响调用；`GET /api/sessions/<id>/audit` 只读查看 |
-| T19 JSONL 输出与退出码 | I7 | ⬜ | — | `main.py` 无 JSONL／output-format 选项 |
+| T19 JSONL 输出与退出码 | I7 | ✅ | `agents/output.py`、`agents/main.py`、`agents/ui.py` | `--output-format text\|json\|jsonl`；stdout 只放记录、界面转 stderr；退出码 0/1/2/3/130 区分成功、错误、用法、预算超限与取消；无 prompt 时拒绝结构化模式 |
 | T20 实例状态隔离 | I7 | ⬜ | — | 大量模块仍直接读取 `Path.cwd()` |
 | T21 OS 级自动调度 | I7 | ⬜ | — | 未开始 |
 
@@ -68,7 +68,7 @@
 
 ## 下一步
 
-**I0–I4 已全部交付**（容器内行为仍需在有 Docker 的机器上验证）。**I5–I6 已全部交付**：审计、记忆、执行型评测均已就位。下一步 I7：输出格式、实例隔离与调度。 I3 的 T09 提供了可运行的评测入口，但 fixture 目前仍是 5 个（计划要求 20–30 个），且真实对照需要模型密钥，不属于 CI 范围。下一步是 I4 隔离执行，它是无人值守写入的前置条件。
+**I0–I4 已全部交付**（容器内行为仍需在有 Docker 的机器上验证）。**I5–I6 已全部交付**。I7 已交付结构化输出与退出码，剩实例隔离与调度。 I3 的 T09 提供了可运行的评测入口，但 fixture 目前仍是 5 个（计划要求 20–30 个），且真实对照需要模型密钥，不属于 CI 范围。下一步是 I4 隔离执行，它是无人值守写入的前置条件。
 
 仍未闭合的两处界面/接口落差：T07 的 Web 端只有接口、没有按钮；授权卡片里的 diff 是纯文本，没有按增删着色。
 
@@ -85,7 +85,7 @@
 
 | 口径 | 结果 |
 | --- | --- |
-| 完整套件 | 508 个用例，`OK (skipped=9)`，约 240 秒 |
+| 完整套件 | 524 个用例，`OK (skipped=9)`，约 240 秒 |
 | CI 矩阵 | 3 个平台 × Python 3.11/3.12 加前端作业，最近一次（run #21）全部通过 |
 | 前端 | `node --check web/app.js` 通过；30 个单测通过 |
 | 跳过原因 | 2 个符号链接用例（Windows 需开发者模式）；其余为既有平台条件跳过 |
