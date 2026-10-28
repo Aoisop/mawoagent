@@ -1,5 +1,8 @@
 # mawoagent 最近修改记录
 
+> **历史记录**：本文记录当时的判断与状态，不再随代码更新。当前行为请以 [项目 README](../../README.md) 与 [文档索引](../README.md) 中的现行文档为准。
+
+
 记录日期：2026-10-21。
 
 本轮处理 `docs/GitHub风险扫描-2026-10-21.md` 中的**三个 P0 与六个 P1**，P2 仍未动。
@@ -49,21 +52,21 @@ def check_permission(tool_name, inp, mode, plan_file_path=None, workspace=None):
 | `plan` | 只允许 plan 文件 | 拒绝 | 拒绝 |
 | `bypassPermissions` | 允许 | 允许 | **拒绝（本轮新增）** |
 
-改动落在 [tools.py](../agents/tools.py)：新增 `_policy_write_denied()`，在 `bypassPermissions`
+改动落在 [tools.py](../../agents/tools.py)：新增 `_policy_write_denied()`，在 `bypassPermissions`
 分支内先判定"是否在写策略文件"，命中则 `deny` 并说明原因；其余写入保持原有放行语义。
 未绑定 workspace 时返回 `None`，历史行为不变（`tests/test_tool_boundaries_v3.py` 的
 `read_file` 用例依赖这一点）。
 
 ### 顺带扩展了受保护文件清单
 
-[workspace.py](../agents/workspace.py) 的 `PROTECTED_RELATIVE_PATHS` 原来只有
+[workspace.py](../../agents/workspace.py) 的 `PROTECTED_RELATIVE_PATHS` 原来只有
 `.mawoagent/settings.json` 和 `.mcp.json`。但还有三类文件会被**读进后续会话的提示词**：
 
 | 路径 | 进入位置 |
 | --- | --- |
-| `.mawoagent/rules/*.md` | 系统提示的 `## Rules` 段（[prompt.py:146](../agents/prompt.py#L146)） |
-| `.mawoagent/skills/**/SKILL.md` | 技能检索与展开（[skills.py](../agents/skills.py)） |
-| `.mawoagent/agents/*.md` | 自定义子代理的系统提示（[subagent.py:90](../agents/subagent.py#L90)） |
+| `.mawoagent/rules/*.md` | 系统提示的 `## Rules` 段（[prompt.py:146](../../agents/prompt.py#L146)） |
+| `.mawoagent/skills/**/SKILL.md` | 技能检索与展开（[skills.py](../../agents/skills.py)） |
+| `.mawoagent/agents/*.md` | 自定义子代理的系统提示（[subagent.py:90](../../agents/subagent.py#L90)） |
 
 不保护这三类的后果是一条完整链：模型读到被投毒的内容 → 用一次普通 `write_file` 写入
 `.mawoagent/rules/x.md` → 此后每个会话的系统提示都携带该指令，且不再需要任何确认。
@@ -78,7 +81,7 @@ def check_permission(tool_name, inp, mode, plan_file_path=None, workspace=None):
 
 ### 测试
 
-[tests/test_workspace_policy.py](../tests/test_workspace_policy.py) 新增 4 个用例：
+[tests/test_workspace_policy.py](../../tests/test_workspace_policy.py) 新增 4 个用例：
 - `test_instruction_bearing_files_are_protected`：rules / skills / agents 计入 protected
 - `test_bypass_permissions_still_refuses_policy_file_writes`：5 类策略文件在 bypass 下均 deny
 - `test_bypass_permissions_still_allows_ordinary_writes`：普通文件仍 allow
@@ -93,10 +96,10 @@ ALFWorld、WebShop、RestBench）。仓库是 MIT，但这些数据不属于本�
 | 动作 | 结果 |
 | --- | --- |
 | `git rm -r --cached data` | 674 个文件移出索引，**本地文件完整保留** |
-| [.gitignore](../.gitignore) 增 `data/` | 后续不会误提交 |
-| [NOTICE](../NOTICE) 改写 | 明确"数据不随仓库分发"，不再用一句 `data/*` 概括 |
-| 新增 [docs/datasets.md](../docs/datasets.md) | 逐数据集说明用途、上游项目与获取方式，并标注哪些是 gated |
-| `data/folding_eval_smoke.jsonl` 复制到 [tests/fixtures/](../tests/fixtures/) | 这个文件是本项目自有的冒烟用例，跟着 `data/` 一起被忽略会让新 clone 无法运行 `eval_folding`。README 的 4 处命令引用已同步改为新路径，并实测 `--validate-only` 通过 |
+| [.gitignore](../../.gitignore) 增 `data/` | 后续不会误提交 |
+| [NOTICE](../../NOTICE) 改写 | 明确"数据不随仓库分发"，不再用一句 `data/*` 概括 |
+| 新增 [docs/datasets.md](../datasets.md) | 逐数据集说明用途、上游项目与获取方式，并标注哪些是 gated |
+| `data/folding_eval_smoke.jsonl` 复制到 [tests/fixtures/](../../tests/fixtures/) | 这个文件是本项目自有的冒烟用例，跟着 `data/` 一起被忽略会让新 clone 无法运行 `eval_folding`。README 的 4 处命令引用已同步改为新路径，并实测 `--validate-only` 通过 |
 
 **未完成，需要决策**：远端 `main` 的历史里仍然包含这 674 个文件。`git rm --cached` 只影响
 下一次提交，仓库体积不会变小。彻底移除需要 `git filter-repo` 重写历史并 force push，
@@ -106,7 +109,7 @@ ALFWorld、WebShop、RestBench）。仓库是 MIT，但这些数据不属于本�
 
 这一项不是本轮任务的一部分，是跑全量回归时暴露出来的既有问题，修它只是为了恢复"全绿"基线。
 
-**原问题**：[storage.py](../agents/storage.py) 的 `state_lock()` 直接 `open("a+b")` 打开 `.lock` 边车文件。
+**原问题**：[storage.py](../../agents/storage.py) 的 `state_lock()` 直接 `open("a+b")` 打开 `.lock` 边车文件。
 Windows 上多个进程同时首次创建同一个锁文件时，会偶发 `PermissionError: [Errno 13] Permission denied`，
 导致 `record_skill_usage_judgments()` 直接抛错。复现率约 1/3。
 
@@ -149,14 +152,14 @@ OK  bypass write notes.txt: allow
 
 ### 6.1 MCP 依赖固定版本
 
-[.mcp.json](../.mcp.json) 原来两处都没有版本：`@upstash/context7-mcp`（无 tag）和 `@playwright/mcp@latest`。
+[.mcp.json](../../.mcp.json) 原来两处都没有版本：`@upstash/context7-mcp`（无 tag）和 `@playwright/mcp@latest`。
 `npx -y` 在首次运行时会下载并执行远端最新代码，以当前用户权限运行——等于把执行权交给两个 npm 包的发布流水线。
 
 | 位置 | 原值 | 现值 |
 | --- | --- | --- |
 | `.mcp.json` context7 | `@upstash/context7-mcp` | `@upstash/context7-mcp@4.4.4` |
 | `.mcp.json` playwright | `@playwright/mcp@latest` | `@playwright/mcp@0.0.83` |
-| [Dockerfile](../Dockerfile) | `playwright@latest` | `playwright@1.64.0-alpha-1790635538000` |
+| [Dockerfile](../../Dockerfile) | `playwright@latest` | `playwright@1.64.0-alpha-1790635538000` |
 
 Dockerfile 那一行不是随手挑的：`@playwright/mcp@0.0.83` 自己就把 `playwright` 与 `playwright-core`
 钉在 `1.64.0-alpha-1790635538000`（一个 alpha 预发布）。如果镜像里装 `playwright@latest`（当前 1.64.1），
@@ -167,7 +170,7 @@ Dockerfile 那一行不是随手挑的：`@playwright/mcp@0.0.83` 自己就把 `
 
 ### 6.2 lock 文件加 hash
 
-[requirements.lock](../requirements.lock) 原来只有 `包==版本`，`pip install` 不校验下载内容；
+[requirements.lock](../../requirements.lock) 原来只有 `包==版本`，`pip install` 不校验下载内容；
 上游包被替换或投毒无法发现。
 
 现在为 30 个包补齐 sha256——同一版本的多平台 wheel 与 sdist **全部列出**，保证 Windows / macOS / Linux
@@ -194,8 +197,8 @@ SHA 取自 GitHub API 的 `git/ref/tags/<tag>`，不是凭记忆填写；行尾�
 | 项 | 改动 |
 | --- | --- |
 | Python 3.13 入矩阵 | `python: ['3.11', '3.12', '3.13']`。本机 `.venv` 就是 3.13.14，此前 CI 从未覆盖 |
-| Dependabot | 新增 [.github/dependabot.yml](../.github/dependabot.yml)：**仅 github-actions**，每周一 03:00 分组升级（原因见下） |
-| 依赖审计 | 新增 [.github/workflows/audit.yml](../.github/workflows/audit.yml)：每周一 03:00 UTC 跑 `pip-audit -r requirements.lock --strict`，也可手动触发 |
+| Dependabot | 新增 [.github/dependabot.yml](../../.github/dependabot.yml)：**仅 github-actions**，每周一 03:00 分组升级（原因见下） |
+| 依赖审计 | 新增 [.github/workflows/audit.yml](../../.github/workflows/audit.yml)：每周一 03:00 UTC 跑 `pip-audit -r requirements.lock --strict`，也可手动触发 |
 
 **为什么 Dependabot 只保留 actions**：配置推送后它立刻开了两个 PR。actions 那个有效（`#25` 已通过 CI）；
 Python 那个只改了 `requirements.txt` 的下限（`openai>=1.0.0`→`>=3.35.1`、`jsonschema==4.25.1`→`==4.26.0`），
@@ -232,4 +235,4 @@ YAML：tests.yml / audit.yml / dependabot.yml 均解析通过
 | P2 | Release / tag / SECURITY.md / 分支保护 | 仓库治理 |
 | P2 | `data/` 的远端历史清理 | 需 `git filter-repo` + force push，影响 12 个 fork |
 
-完整依据见 [GitHub风险扫描-2026-10-21.md](GitHub风险扫描-2026-10-21.md)。
+完整依据见 [GitHub风险扫描-2026-10-21.md](scans/github-risk-scan-2026-10-21.md)。

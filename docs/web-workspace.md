@@ -1,5 +1,7 @@
 # 本地 Web 工作台
 
+> 返回：[文档索引](README.md)
+
 采用石墨深色工作台：米白文字、香槟金主操作、集中式任务入口与分层任务详情。使用原生 HTML / CSS / JavaScript 和 Python 标准库服务，不需要安装 Node.js 前端依赖或增加 Python 包。
 
 ## 启动

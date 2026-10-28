@@ -22,7 +22,7 @@ The focus is the **Harness**: the model proposes actions, and the Runtime decide
 
 #### 1. Prepare the environment and install dependencies
 
-Python **3.11, 3.12 and 3.13** all work. CI verifies 3.11 and 3.12 on Linux, macOS and Windows; 3.13 has been verified only on Windows so far, so treat it as untested on the other two platforms (see the [environment baseline](docs/t01-environment-baseline-2026-10-20.md)). The commands below target macOS / Linux. Git is used to fetch the code; ripgrep is optional. Node.js is not required to run the web workbench, but is needed for frontend tests or for MCP tools that depend on Node.js.
+Python **3.11, 3.12 and 3.13** all work. CI verifies 3.11 and 3.12 on Linux, macOS and Windows; 3.13 has been verified only on Windows so far, so treat it as untested on the other two platforms (see the [environment baseline](docs/records/t01-environment-baseline-2026-10-20.md)). The commands below target macOS / Linux. Git is used to fetch the code; ripgrep is optional. Node.js is not required to run the web workbench, but is needed for frontend tests or for MCP tools that depend on Node.js.
 
 Run these commands in the **mawoagent repository root**:
 
@@ -51,7 +51,7 @@ Copy-Item .env.example .env   # skip if .env already exists
 
 Start later with `.venv\Scripts\python.exe -m agents.web`, or activate the environment with `.venv\Scripts\Activate.ps1` and run `python -m agents.web`.
 
-Two checks confirm a freshly built environment matches the pinned set: `python -m pip check` reports no broken requirements, and `python -m unittest discover -s tests -q` passes offline against the mock model. The results recorded for this repository are in the [environment baseline](docs/t01-environment-baseline-2026-10-20.md).
+Two checks confirm a freshly built environment matches the pinned set: `python -m pip check` reports no broken requirements, and `python -m unittest discover -s tests -q` passes offline against the mock model. The results recorded for this repository are in the [environment baseline](docs/records/t01-environment-baseline-2026-10-20.md).
 
 #### 2. Configure the model connection
 
@@ -225,279 +225,46 @@ Shell commands run through a pluggable backend. `MAWOAGENT_SANDBOX=local` (defau
 - **Session recovery and context compaction**: sessions are saved automatically; `--resume` and `/compact` are supported, and large tool results are truncated or persisted.
 - **Per-turn snapshots and undo**: each turn keeps the original content of every file it changes; `/diff` and `/undo` expose it from the CLI and the web API, and undo refuses to overwrite edits made after the turn.
 
-### Architecture
-
-Core runtime path:
-
-```text
-User input
-  -> agents/main.py (CLI) or agents/web.py (web)
-  -> Agent.chat()
-  -> build prompt / retrieve Skills / prefetch Memory / initialize MCP
-  -> call an OpenAI-compatible or Anthropic-compatible model
-  -> model returns text or a tool call
-  -> Runtime checks permissions
-  -> execute tool / Skill / MCP / sub-agent
-  -> write the tool result back to the model
-  -> save the session
-  -> run skill usage tracking and online skill evolution in the background
-```
-
-### Directory layout
-
-```text
-mawoagent/
-├── agents/
-│   ├── main.py                    # CLI entry, REPL, argument parsing
-│   ├── web.py                     # web backend: static pages, HTTP API, SSE events
-│   ├── config.py                  # shared environment and model config for CLI, web, evaluation
-│   ├── agent.py                   # Agent Runtime, model calls, tool dispatch, context compaction
-│   ├── context_runtime.py         # context preflight and time-bounded Memory recall shared by both protocols
-│   ├── tool_results.py            # model-independent tool result compaction
-│   ├── result_storage.py          # persist large tool results, checkpoints, and previews
-│   ├── streaming.py               # isolated streaming attempts and fallback output
-│   ├── checkpoints.py             # tool execution checkpoints and interrupt recovery
-│   ├── tools.py                   # built-in tools and permission system
-│   ├── tool_schemas.py            # tool definitions and parameter schemas
-│   ├── prompt.py                  # dynamic system prompt construction
-│   ├── skills.py                  # Skills loading, retrieval, execution, creation, and evolution
-│   ├── online_skill_evolution.py  # online Skill extraction and add/merge/discard decisions
-│   ├── skill_evolution.py         # Skill persistence, version snapshots, audit stats
-│   ├── memory.py                  # long-term memory system
-│   ├── mcp_client.py              # MCP stdio JSON-RPC client
-│   ├── subagent.py                # sub-agent configuration
-│   ├── session.py                 # session persistence and recovery
-│   └── ui.py                      # terminal UI output
-├── web/                          # frontend sources, no bundling required
-│   ├── index.html                # page structure
-│   ├── styles.css                # graphite dark theme and responsive layout
-│   ├── app.js                    # page interactions, API requests, SSE subscriptions
-│   ├── chat-view.mjs             # Markdown rendering and partial message updates
-│   ├── chat-scroll.mjs           # chat scroll control
-│   ├── conversation-state.mjs    # session state, drafts, and attachments
-│   └── tests/                    # frontend unit tests
-├── .mawoagent/
-│   ├── skills/                    # project-level Skills
-│   └── skill-evolution/           # Skill self-evolution audit artifacts
-├── data/                          # local benchmark data only, not distributed (docs/datasets.md)
-├── docs/                          # web workbench, runtime reliability, and iteration strategy
-├── tests/                         # Python regression tests
-├── .github/                       # CI workflows
-├── Dockerfile
-├── .env.example                  # model configuration template
-├── requirements.lock             # pinned dependencies used for installs
-├── requirements.txt              # direct dependencies and version ranges
-└── README.md
-```
-
-### Skill self-evolution
-
-The defining feature of mawoagent is **Skill self-evolution**. It extracts reusable rules from explicit user feedback, stores them as candidates by default, and publishes them to a project-level or user-level `SKILL.md` only after evaluation or explicit manual review.
-
-#### 1. Enable automatic self-evolution
-
-`MAWOAGENT_AUTO_SKILL_EVOLUTION` is enabled by default. For explicit configuration, set it in `.env`:
-
-```env
-MAWOAGENT_AUTO_SKILL_EVOLUTION=1
-MAWOAGENT_AUTO_SKILL_TARGET=project
-```
-
-What they mean:
-
-- `MAWOAGENT_AUTO_SKILL_EVOLUTION=1`: enable online Skill self-evolution.
-- `MAWOAGENT_AUTO_SKILL_TARGET=project`: write automatically created Skills to the current project's `.mawoagent/skills/`.
-
-To accumulate personal Skills shared across all projects:
-
-```env
-MAWOAGENT_AUTO_SKILL_TARGET=user
-```
-
-Corresponding paths:
-
-```text
-project: <project>/.mawoagent/skills/<skill_name>/SKILL.md
-user:    ~/.mawoagent/skills/<skill_name>/SKILL.md
-```
-
-#### 2. Start in a permission mode that allows writes
-
-Saving Skill candidates in the background requires a permission mode that allows maintenance operations. Recommended:
-
-```bash
-MAWOAGENT_AUTO_SKILL_EVOLUTION=1 \
-MAWOAGENT_AUTO_SKILL_TARGET=project \
-python -m agents.main --accept-edits
-```
-
-A more aggressive mode is also available:
-
-```bash
-python -m agents.main --yolo
-```
-
-Do not use `--yolo` as a long-term default, because it skips confirmations. `--accept-edits` is the daily recommendation.
-
-#### 3. Give reusable feedback
-
-Self-evolution is not about turning every sentence into a Skill. It only fits stable, explicit rules that will still apply to similar tasks in the future.
-
-Not suitable for accumulation:
-
-```text
-Write me a 500-word government report.
-```
-
-Suitable for accumulation:
-
-```text
-From now on, when writing government reports, work summaries, or research material, start with a usable draft by default instead of asking follow-up questions. Structure it as title, background, current situation, problem analysis, measures, and next steps, and keep the language formal and restrained.
-```
-
-Suitable for evolving an existing Skill:
-
-```text
-For this kind of government report, include key data metrics from now on; do not rely only on conceptual statements.
-```
-
-#### 4. How the evolution loop works
-
-```text
-Turn N: user task
-  -> Agent produces a result
-  -> save the pending extraction window
-Turn N+1: user feedback
-  -> merge into the previous window
-  -> persist pending feedback with the session, then submit to the background queue (independent of this turn's success)
-  -> online_ingest()
-  -> Extractor extracts candidate Skills
-  -> Maintainer decides add / merge / discard
-  -> save isolated candidates: view with /skill-candidates
-  -> /skill-eval validates merge candidates for existing Skills
-  -> /skill-apply <id> publishes a candidate that passed evaluation
-  -> write SKILL.md; /skill-rollback <name> restores the previous version
-  -> record provenance, usage stats, and version snapshots
-```
-
-Core files:
-
-```text
-agents/agent.py
-agents/online_skill_evolution.py
-agents/skills.py
-agents/skill_evolution.py
-```
-
-Audit artifacts:
-
-```text
-.mawoagent/skill-evolution/usage.jsonl
-.mawoagent/skill-evolution/online_provenance.jsonl
-.mawoagent/skill-evolution/online_skill_provenance.json
-.mawoagent/skill-evolution/skill_usage_stats.json
-.mawoagent/skill-evolution/history/
-```
-
-### Online Skill regression evaluation
-
-Run `/skill-eval` in the REPL. The first run generates `replay_review.jsonl`; choose "redo the original task" or "feedback correction", bind the target message turn, confirm session ownership and acceptance criteria, then run it again. Questions and context are rebuilt from the source, and duplicate targets are counted once. The current version, the candidate, and the existing champion re-answer the same task batch; same-session windows are grouped, sample count and model calls are capped, and incomplete or abnormal comparisons never get promoted.
-
-These are regression checks for text tasks. Their sources may have been involved in Skill learning and do not represent independent benchmark results. Rules are no longer guessed from Skill keywords; championship snapshots are stored separately. String requirements must pass by default, optional requirements use `{"text":"requirement", "required":false}`, and critical failures cannot be offset by other scores. The `json_schema` check can validate fields and types, and `MAWOAGENT_SKILL_JUDGE_MODEL` can select a separate judge model on the same service.
-
-When a new Skill has no independent replay samples, you can explicitly use `/skill-apply <id> --manual-review` after review; this is a manual release and does not imply the evaluation passed. Background jobs have a concurrency cap and persist pending work; source logs are read as incremental indexes. `/cleanup-state [days]` previews old tool results and evaluation run directories, and deletes only with an explicit `--apply`; the current champion run directory is preserved.
-
-Candidate publishing, permissions, acceptance criteria, and recovery are described in [runtime reliability and Skills publishing](docs/runtime-hardening.md).
-
-### Sessions, permissions, and runtime boundaries
-
-By default only the most recently updated session of the current project is resumed. `--resume-id <session-id>` selects a specific session; recovery is refused when the project path or API protocol differs, so operation context from another project cannot leak into the current directory.
-
-Session recovery also preserves Skill-learning context, the pending feedback window, and stable conversation grouping. Unknown models default to a 32000-token capacity; use `--context-window N` or `MAWOAGENT_CONTEXT_WINDOW` to set the actual capacity.
-
-The budget covers the main model, auxiliary calls, and running sub-agents. `/clear` only clears context and does not reset the accumulated cost of the current process. The default input/output estimate remains USD 3/15 per million tokens, configurable with `--input-price`, `--output-price`, or `MAWOAGENT_INPUT_PRICE_PER_MILLION` / `MAWOAGENT_OUTPUT_PRICE_PER_MILLION` in `.env`. The budget is an estimate based on returned usage; concurrent requests already sent, SDK-internal retries, and unknown usage from failed requests can still exceed the estimated cap.
-
-`Ctrl+C` cancels the current task; shell timeouts and cancellations clean up the process group (macOS / Linux). On exit, model clients and MCP are closed, background Skill tasks are given at most 5 seconds, and unfinished tasks are then cancelled; `MAWOAGENT_SHUTDOWN_TIMEOUT` adjusts the wait.
-
-`/skill-eval` waits for current background Skill tasks to finish before reading source records and skill snapshots; this wait does not use the shutdown timeout and does not cancel learning tasks.
-
-Online Skill creation, evolution, retirement, and manual `/skill-create`, `/skill-evolve`, and `/skill-restore` share the same permission checks. Without explicit allow rules, the default mode and `--dont-ask` never write or move Skills automatically; `--accept-edits` still honors deny rules. Background tasks never show confirmation prompts; operations that require confirmation are rejected. Archived Skills can be restored with `/skill-restore <name>`.
-
-Starting an MCP server itself also requires permission; project-configured commands cannot be executed implicitly through tool discovery. The default mode and `--accept-edits` confirm each start command; plan mode does not start MCP, and `--dont-ask` refuses to start without an explicit allow rule. Use `mcp_start(server-name)` to configure start rules; start permission and the permission to call `mcp__server__tool` are checked separately. If plan approval encounters closed input, no approval callback, or an invalid result, plan mode is retained and execution is not authorized.
-
-Project-level allow rules require trusting the current configuration with `/trust-project` first; project-level deny rules always apply. Trust binds the project path and a configuration digest, so permission or MCP configuration changes require trusting again. Every tool re-checks the current mode at execution time, and MCP calls show their parameters and ask for confirmation each time. Tools in truncated responses are not executed.
-
-File tools operate on the given path and never substitute a non-existent absolute path with a same-named file in the current directory. Context compaction requires complete, correctly typed structured memory; when the model fails, output is truncated, fields are missing, or the task state is empty, compaction is skipped and the original message history and compaction count are preserved.
-
-Sessions, Skill statistics, source indexes, and evaluation state use atomic replacement via temporary files; read-modify-write of statistics, source indexes, Skill evolution, replay pools, and the champion registry uses cooperative file locks. Corrupt JSON is preserved and reported. File locks cannot stop an external editor that ignores them from overwriting a file, and multi-file updates are not equivalent to a database transaction.
-
-### Folded comparison evaluation
-
-Early self-run folded evaluation produced low numbers, so the `53.3%`, `20.2%`, and `44.7%` figures used in earlier explanatory material for GAIA / HLE metrics and memory-folding ablation **reuse results from the DeepAgent paper directly** (the paper PDF is not distributed with this repository) as quantitative references for the paper's method. The evaluation entry points are in the repository; the benchmark datasets are not (see `docs/datasets.md`). Fetch them from their publishers and run the evaluation yourself to see how mawoagent performs under your configuration.
-
-Validate the cases first, then run the same cases with folding on and off. The run calls the model and saves per-case answers, scoring, traces before and after folding, and a summary.
-
-```bash
-python -m agents.eval_folding --cases tests/fixtures/folding_eval_smoke.jsonl --output .mawoagent/folding-eval/smoke-001 --validate-only
-python -m agents.eval_folding --cases tests/fixtures/folding_eval_smoke.jsonl --output .mawoagent/folding-eval/smoke-001 --fold-after-turn 2
-```
-
-The evaluation entry point follows DeepAgent's three-way parallel memory generation (events, work, tools) and allows at most 3 folds per case by default; use `--fold-memory-mode single_json` and `--max-fold-limit N` for internal comparisons. `--fold-after-turn` is a fixed trigger added by mawoagent for short samples, not the paper's original trigger. The tool environment and grader still differ from the paper, so the resulting scores cannot be compared directly with the paper's tables.
-
-Accuracy is computed only for pairs where both groups completed, the folding group actually folded, the non-folding group did not fold, and the case's tool requirements were reviewed. Invalid pairs and reasons are recorded in `summary.json`. Raw GAIA / HLE cases must first be reviewed for required tools and converted into JSONL with `required_tools`; text-only cases may also need network access that this entry point does not provide. `review_queue.jsonl` stores predictions that need manual review.
-
-To keep a single model reply from growing too long, evaluation caps each main-model reply at 2048 tokens by default; adjust with `--max-output-tokens`. `--max-cost` is an estimate check after replies complete and does not replace the per-reply output cap.
-
-The samples only verify the evaluation pipeline. For the source of the paper numbers, how to run your own evaluation, and the result conventions, use the paper as the authoritative source; the evaluation approach is described in [runtime reliability notes](docs/runtime-hardening.md).
-
-### Development and verification
-
-Python regression tests use a mock model and do not call paid models:
-
-```bash
-source .venv/bin/activate
-python -m unittest discover -s tests -q
-```
-
-To check only the web backend:
-
-```bash
-python -m unittest discover -s tests -p 'test_web*.py' -q
-```
-
-Frontend syntax and unit tests use Node.js (CI uses Node.js 22) and require no npm packages:
-
-```bash
-node --check web/app.js
-node --test web/tests/*.test.mjs
-```
-
-Coverage includes session increments, drafts and attachments, chat scrolling, Markdown rendering, and web permission and HTTP access boundaries. Model quality and Skill generalization require separate evaluation.
-
-Coding-task fixtures with fixed initial states, allowed tools, budgets, and programmatic checks live in [tests/fixtures/tasks](tests/fixtures/tasks/README.md); `python -m unittest tests.test_task_fixtures` verifies that every fixture fails unsolved and passes against its reference solution.
-
+### Documentation
+
+| Topic | Document |
+| --- | --- |
+| Architecture and directory layout | [docs/reference/architecture.md](docs/reference/architecture.md) |
+| Skills: format, self-evolution, regression evaluation | [docs/guide/skills.md](docs/guide/skills.md) |
+| Sessions, permissions, runtime boundaries | [docs/guide/permissions.md](docs/guide/permissions.md) |
+| Folding and evaluation methodology | [docs/guide/evaluation.md](docs/guide/evaluation.md) |
+| Development and verification | [docs/guide/development.md](docs/guide/development.md) |
+| CLI, configuration, scheduling, web, datasets | [docs/README.md](docs/README.md) |
 ### Iteration plan and progress
 
-The roadmap is split into eight iterations (I0–I7) covering 21 tasks and six review-sized PRs. The first release is **I0–I2**: make a local code change reviewable before and recoverable after.
+The roadmap is split into eight iterations (I0–I7) covering 21 tasks and six review-sized PRs.
 
 | Iteration | Tasks | Delivered |
 | --- | --- | --- |
 | I0 Baseline and development environment | 2 | 2 |
 | I1 Access range and edit review | 3 | 3 |
 | I2 File snapshots and undo | 2 | 2 |
-| I3–I7 Code understanding, isolation, tools, learning, automation | 14 | 6 |
+| I3 Code understanding and task fixtures | 3 | 3 |
+| I4 Isolated execution | 2 | 2 |
+| I5 Browser and remote tools | 3 | 3 |
+| I6 Learning and automation | 3 | 3 |
+| I7 Packaging and release | 3 | 3 |
 
-Current status: **13 of 21 tasks**: I0–I4 are complete and I5 has started with typed tool results. Container isolation itself still needs a machine with Docker to verify. The [roadmap](docs/iteration-roadmap-2026-10-19.md) defines every task and its acceptance criteria; the [progress table](docs/iteration-progress.md) records what is delivered, what it was verified with, and which defects are still open.
+Current status: **21 of 21 tasks**, released as **v1.0.0**. Two things still need another environment to verify: behaviour inside a container, and a real remote MCP server. The [roadmap](docs/iteration-roadmap-2026-10-19.md) defines every task and its acceptance criteria; the [progress table](docs/iteration-progress.md) records what is delivered, what it was verified with, and which defects are still open.
 
 ### More documentation
 
-- [Web workbench: UI features, startup, and runtime boundaries](docs/web-workspace.md)
+Everything else lives in [docs/](docs/README.md), which lists each document and what question it answers:
+
+- [CLI, configuration, scheduling, web, datasets](docs/README.md) — the index
+- [Architecture and directory layout](docs/reference/architecture.md)
+- [Skills: format, self-evolution, regression evaluation](docs/guide/skills.md)
+- [Sessions, permissions and runtime boundaries](docs/guide/permissions.md)
+- [Evaluation methodology](docs/guide/evaluation.md)
+- [Development and verification](docs/guide/development.md)
 - [Runtime reliability and the Skills publishing flow](docs/runtime-hardening.md)
+- [Web workbench](docs/web-workspace.md)
 - [Changelog](CHANGELOG.md)
-- [Iteration roadmap (2026-10-19)](docs/iteration-roadmap-2026-10-19.md)
-- [Iteration progress: delivered tasks and open risks](docs/iteration-progress.md)
-- [T01 environment baseline: Python setup and test results (2026-10-20)](docs/t01-environment-baseline-2026-10-20.md)
-- [Recent changes (2026-10-15)](最近修改记录-2026-10-15.md)
 
 ### Origin and attribution
 
@@ -516,7 +283,6 @@ May every conversation be remembered well, and may every long task have someone 
 — Aoisop
 
 <a name="zh"></a>
-
 ## 简体中文
 
 mawoagent 是一个由 Aoisop 创建和维护的、基于 Python 的本地 **Agent Runtime**，同时提供网页工作台和命令行入口。它把模型推理、工具执行、权限确认、会话恢复、长期记忆、Skills 与自进化流程连接在一起，适合用于项目分析、编程辅助，也适合学习和扩展 Agent 的运行机制。
@@ -535,7 +301,7 @@ mawoagent 是一个由 Aoisop 创建和维护的、基于 Python 的本地 **Age
 
 #### 1. 准备环境并安装依赖
 
-Python **3.11、3.12、3.13** 均可使用。CI 在 Linux、macOS 与 Windows 上验证 3.11 和 3.12；3.13 目前只在 Windows 上验证过，其余两个平台尚未测试（见[环境基线](docs/t01-environment-baseline-2026-10-20.md)）。以下命令适用于 macOS / Linux。Git 用于获取代码，ripgrep 可选；仅运行网页工作台不需要 Node.js。运行前端测试或使用依赖 Node.js 的 MCP 工具时，再准备 Node.js 环境。
+Python **3.11、3.12、3.13** 均可使用。CI 在 Linux、macOS 与 Windows 上验证 3.11 和 3.12；3.13 目前只在 Windows 上验证过，其余两个平台尚未测试（见[环境基线](docs/records/t01-environment-baseline-2026-10-20.md)）。以下命令适用于 macOS / Linux。Git 用于获取代码，ripgrep 可选；仅运行网页工作台不需要 Node.js。运行前端测试或使用依赖 Node.js 的 MCP 工具时，再准备 Node.js 环境。
 
 在 **mawoagent 仓库根目录**执行：
 
@@ -564,7 +330,7 @@ Copy-Item .env.example .env   # 已有 .env 时跳过
 
 后续启动使用 `.venv\Scripts\python.exe -m agents.web`，或先执行 `.venv\Scripts\Activate.ps1` 再运行 `python -m agents.web`。
 
-可以用两条检查确认新建环境与锁定版本一致：`python -m pip check` 不报告依赖冲突；`python -m unittest discover -s tests -q` 在离线 mock 模型下全部通过。本仓库记录的实际结果见[环境基线](docs/t01-environment-baseline-2026-10-20.md)。
+可以用两条检查确认新建环境与锁定版本一致：`python -m pip check` 不报告依赖冲突；`python -m unittest discover -s tests -q` 在离线 mock 模型下全部通过。本仓库记录的实际结果见[环境基线](docs/records/t01-environment-baseline-2026-10-20.md)。
 
 #### 2. 配置模型连接
 
@@ -737,279 +503,47 @@ Shell 命令走可插拔的执行后端：`MAWOAGENT_SANDBOX=local`（默认）�
 - **会话恢复和上下文压缩**：自动保存 session，支持 `--resume`、`/compact`，并对大工具结果做截断或持久化。
 - **轮次快照与撤销**：每轮记录被修改文件的原始内容，CLI 与 Web 接口提供 `/diff` 和 `/undo`；撤销不会覆盖该轮之后的手工修改。
 
-### 项目架构
-
-核心运行链路：
-
-```text
-用户输入
-  -> agents/main.py（CLI）或 agents/web.py（网页）
-  -> Agent.chat()
-  -> 构建 Prompt / 检索 Skills / 预取 Memory / 初始化 MCP
-  -> 调用 OpenAI-compatible 或 Anthropic-compatible 模型
-  -> 模型返回文本或 tool call
-  -> Runtime 做权限检查
-  -> 执行工具 / Skill / MCP / 子 Agent
-  -> tool result 回写模型
-  -> 保存 Session
-  -> 后台执行 Skill usage tracking 和 online skill evolution
-```
-
-### 目录结构
-
-```text
-mawoagent/
-├── agents/
-│   ├── main.py                    # CLI 入口、REPL、参数解析
-│   ├── web.py                     # Web 后端：静态页面、HTTP API、SSE 流式事件
-│   ├── config.py                  # CLI、Web、评测共用的环境和模型配置
-│   ├── agent.py                   # Agent Runtime、模型调用、工具调度、上下文压缩
-│   ├── context_runtime.py         # 两种协议共用的上下文预检和限时 Memory 召回
-│   ├── tool_results.py            # 无模型依赖的工具结果压缩策略
-│   ├── result_storage.py          # 大工具结果单独落盘、检查点与上下文保留预览
-│   ├── streaming.py               # 流式尝试隔离与失败输出回退
-│   ├── checkpoints.py             # 工具执行检查点与中断恢复
-│   ├── tools.py                   # 内置工具和权限系统
-│   ├── tool_schemas.py            # 工具定义与参数 Schema
-│   ├── prompt.py                  # System prompt 动态构建
-│   ├── skills.py                  # Skills 加载、检索、执行、创建和演化封装
-│   ├── online_skill_evolution.py  # 在线 Skill 抽取和 add/merge/discard 决策
-│   ├── skill_evolution.py         # Skill 落盘、版本快照、审计统计
-│   ├── memory.py                  # 长期记忆系统
-│   ├── mcp_client.py              # MCP stdio JSON-RPC 客户端
-│   ├── subagent.py                # 子 Agent 配置
-│   ├── session.py                 # 会话保存与恢复
-│   └── ui.py                      # 终端 UI 输出
-├── web/                          # 前端源码，无需打包
-│   ├── index.html                # 页面结构
-│   ├── styles.css                # 石墨深色主题与响应式布局
-│   ├── app.js                    # 页面交互、API 请求与 SSE 订阅
-│   ├── chat-view.mjs             # Markdown 排版与消息局部更新
-│   ├── chat-scroll.mjs           # 聊天滚动控制
-│   ├── conversation-state.mjs    # 会话状态、草稿与附件
-│   └── tests/                    # 前端单元测试
-├── .mawoagent/
-│   ├── skills/                    # 项目级 Skills
-│   └── skill-evolution/           # Skills 自进化审计产物
-├── data/                          # 仅本地评测数据，不随仓库分发（见 docs/datasets.md）
-├── docs/                          # Web 工作台、运行可靠性与迭代方向说明
-├── tests/                         # Python 回归测试
-├── .github/                       # CI 工作流
-├── Dockerfile
-├── .env.example                  # 模型配置模板
-├── requirements.lock             # 固定版本依赖，安装时使用
-├── requirements.txt              # 直接依赖与版本范围
-└── README.md
-```
-
-### Skills 自进化
-
-mawoagent 的核心特色是 **Skills 自进化**。它从用户明确反馈中抽取未来可复用的规则，默认保存候选；通过评测或明确的人工审核后，才发布到项目级或用户级 `SKILL.md`。
-
-#### 1. 开启自动自进化
-
-默认 `MAWOAGENT_AUTO_SKILL_EVOLUTION` 是开启的。为了明确配置，建议在 `.env` 中写：
-
-```env
-MAWOAGENT_AUTO_SKILL_EVOLUTION=1
-MAWOAGENT_AUTO_SKILL_TARGET=project
-```
-
-含义：
-
-- `MAWOAGENT_AUTO_SKILL_EVOLUTION=1`：启用在线 Skill 自进化。
-- `MAWOAGENT_AUTO_SKILL_TARGET=project`：自动新增的 Skill 写入当前项目 `.mawoagent/skills/`。
-
-如果希望沉淀为所有项目共享的个人 Skill：
-
-```env
-MAWOAGENT_AUTO_SKILL_TARGET=user
-```
-
-对应路径：
-
-```text
-project: <project>/.mawoagent/skills/<skill_name>/SKILL.md
-user:    ~/.mawoagent/skills/<skill_name>/SKILL.md
-```
-
-#### 2. 用允许写入的权限模式启动
-
-后台保存 Skill 候选需要当前权限模式允许维护操作。推荐使用：
-
-```bash
-MAWOAGENT_AUTO_SKILL_EVOLUTION=1 \
-MAWOAGENT_AUTO_SKILL_TARGET=project \
-python -m agents.main --accept-edits
-```
-
-也可以使用更激进的模式：
-
-```bash
-python -m agents.main --yolo
-```
-
-不建议长期默认使用 `--yolo`，因为它会跳过确认。日常推荐 `--accept-edits`。
-
-#### 3. 给出可复用反馈
-
-自进化不是把每一句话都写成 Skill。它只适合沉淀稳定、明确、未来同类任务仍适用的规则。
-
-不太适合沉淀：
-
-```text
-帮我写一篇 500 字政府报告。
-```
-
-适合沉淀：
-
-```text
-以后写政府报告、工作汇报、调研材料时，默认先给可直接使用的初稿，不要连续追问；结构按“标题、背景、主要情况、问题分析、工作举措、下一步计划”组织，语言要正式克制。
-```
-
-适合演化已有 Skill：
-
-```text
-以后这类政府报告还要加入关键数据指标，不能只写概念性表述。
-```
-
-#### 4. 自进化链路如何工作
-
-```text
-第 N 轮用户任务
-  -> Agent 输出结果
-  -> 保存 pending extraction window
-第 N+1 轮用户反馈
-  -> 合并进上一轮 window
-  -> 随会话持久化待提交反馈，再提交后台队列（不依赖本轮回答成功）
-  -> online_ingest()
-  -> Extractor 抽取候选 Skill
-  -> Maintainer 判断 add / merge / discard
-  -> 保存隔离候选：/skill-candidates 查看
-  -> /skill-eval 验证已有 Skill 的合并候选
-  -> /skill-apply <id> 发布通过评测的候选
-  -> 写入 SKILL.md；/skill-rollback <name> 可恢复旧版本
-  -> 记录 provenance、usage stats 和版本快照
-```
-
-核心文件：
-
-```text
-agents/agent.py
-agents/online_skill_evolution.py
-agents/skills.py
-agents/skill_evolution.py
-```
-
-审计产物：
-
-```text
-.mawoagent/skill-evolution/usage.jsonl
-.mawoagent/skill-evolution/online_provenance.jsonl
-.mawoagent/skill-evolution/online_skill_provenance.json
-.mawoagent/skill-evolution/skill_usage_stats.json
-.mawoagent/skill-evolution/history/
-```
-
-### 在线 Skill 回归评测
-
-REPL 中运行 `/skill-eval`。首次生成 `replay_review.jsonl`，选择“原任务重做 / 反馈修正”、绑定目标消息轮次，确认会话归属和验收条件后再次运行。题目和上下文从来源重建，重复目标只计一次。当前版、候选和已有冠军在同一批任务上重新作答；同会话窗口固定分组，样本数与模型调用量有上限，异常或不完整比较不会晋级。
-
-这些是文本任务的回归检查，来源可能参与过 Skill 学习，不代表独立 benchmark 成绩。规则不再从 Skill 关键词自动猜测；冠军快照单独保存。当前 `requirements` 的字符串默认必须通过，可选项使用 `{"text":"要求", "required":false}`，关键失败不能靠其他分数抵消。`json_schema` 检查可校验字段及类型，`MAWOAGENT_SKILL_JUDGE_MODEL` 可单独指定同服务的裁判模型。
-
-新 Skill 或缺少独立回放样本时，可在审阅后明确使用 `/skill-apply <id> --manual-review`；这是人工发布，不代表通过评测。后台任务有并发上限并保存待办；来源日志按增量索引读取。`/cleanup-state [days]` 预览旧工具结果和评测运行目录，明确加 `--apply` 才删除，当前冠军运行目录保留。
-
-当前候选发布、权限、验收条件和恢复流程详见 [运行可靠性与 Skills 发布流程](docs/runtime-hardening.md)。
-
-### 会话、权限与运行边界
-
-默认只恢复当前项目的最近更新会话。也可使用 `--resume-id <会话ID>` 指定会话；项目路径或 API 协议不一致时拒绝恢复，避免把其他项目的操作上下文带入当前目录。
-
-恢复会话也保留 Skill 学习上下文、待反馈窗口和稳定的对话分组。未知模型默认按 32000 token 容量处理，可通过 `--context-window N` 或 `MAWOAGENT_CONTEXT_WINDOW` 指定实际容量。
-
-预算覆盖主模型、辅助调用及运行中的子 Agent，`/clear` 只清理上下文，不重置本次进程的累计费用。默认输入/输出估价仍为每百万 token 3/15 美元，可通过 `--input-price`、`--output-price` 或 `.env` 的 `MAWOAGENT_INPUT_PRICE_PER_MILLION`、`MAWOAGENT_OUTPUT_PRICE_PER_MILLION` 修改。预算是基于已返回用量的估算；已发出的并发请求、SDK 内部重试和失败请求的未知用量仍可能超出估算上限。
-
-Ctrl+C 会取消当前任务；Shell 超时和取消会清理其进程组（macOS/Linux）。退出时会关闭模型客户端和 MCP，并最多等待后台 Skill 任务 5 秒，再取消未完成任务；可用 `MAWOAGENT_SHUTDOWN_TIMEOUT` 调整等待时间。
-
-`/skill-eval` 会等待当前后台 Skill 任务完成，再读取来源记录和技能快照；此等待不使用退出超时，也不会因此取消学习任务。
-
-在线 Skill 创建、演化、淘汰及手动 `/skill-create`、`/skill-evolve`、`/skill-restore` 共用权限检查。没有显式 allow 规则时，默认及 `--dont-ask` 模式不会自动写入或移走 Skill；`--accept-edits` 下仍遵守 deny 规则。后台任务不会弹出确认提示；需要确认的操作会被拒绝。归档后可输入 `/skill-restore <名称>` 恢复。
-
-MCP Server 启动本身也需要权限，不能通过发现工具隐式执行项目配置中的命令。默认及 `--accept-edits` 模式逐个确认启动命令；计划模式不启动 MCP，`--dont-ask` 下没有显式 allow 规则时拒绝启动。可用 `mcp_start(服务名)` 配置启动规则；启动权限与 `mcp__服务名__工具名` 的调用权限分别检查。计划审批遇到输入关闭、无审批回调或无效结果时保留计划模式，不授权执行。
-
-项目级 allow 规则须先通过 `/trust-project` 信任当前配置；项目级 deny 始终生效。信任绑定项目路径和配置摘要，修改权限或 MCP 配置后需要重新信任。每个工具在执行时重新检查当前模式，MCP 调用逐次展示参数并确认。截断响应中的工具不会执行。
-
-文件工具按传入路径操作，不会把不存在的绝对路径替换为当前目录中的同名文件。上下文压缩要求完整且类型正确的结构化记忆；模型失败、截断、字段缺失或任务状态为空时跳过压缩，保留原始消息历史和压缩次数。
-
-Session、Skill 统计、来源索引和评测状态使用临时文件原子替换；统计、来源索引、Skill 演化、回放池和冠军注册表的读改写使用协作文件锁。损坏 JSON 会保留并报错。文件锁不能阻止未使用该锁的外部编辑器覆盖文件，多文件更新也不等同于数据库事务。
-
-### 折叠对照评测
-
-mawoagent 早期自行试跑折叠评测时，得到的数据偏低。因此，早期说明材料中用于说明 GAIA / HLE 指标和记忆折叠消融的 `53.3%`、`20.2%`、`44.7%` **直接复用 DeepAgent 论文的结果**（论文 PDF 未随仓库分发），用于展示论文方法的量化参照。评测入口在仓库中，基准数据集不随仓库分发（见 `docs/datasets.md`），需要从各自发布方获取后运行，才能了解 mawoagent 在自己配置下的表现。
-
-先校验案例，再运行同题的折叠开启/关闭对照。运行命令会调用模型；结果会保存逐题答案、判分、折叠前后的轨迹和汇总。
-
-```bash
-python -m agents.eval_folding --cases tests/fixtures/folding_eval_smoke.jsonl --output .mawoagent/folding-eval/smoke-001 --validate-only
-python -m agents.eval_folding --cases tests/fixtures/folding_eval_smoke.jsonl --output .mawoagent/folding-eval/smoke-001 --fold-after-turn 2
-```
-
-评测入口默认采用参考 DeepAgent 源码的三路并行记忆生成（事件、工作、工具）和每题最多 3 次折叠；可通过 `--fold-memory-mode single_json`、`--max-fold-limit N` 做本项目内部对照。`--fold-after-turn` 是 mawoagent 为短样例增加的固定触发，不是论文原始触发方式。此入口的工具环境与判分器仍不同于论文，生成的分数不能直接对标论文表格。
-
-汇总只对两组都完成、开启组确实折叠、关闭组未折叠且题目工具需求已审核的配对计算正确率；无效配对和原因保留在 `summary.json`。原始 GAIA/HLE 题目需先逐题审核所需工具并整理为带 `required_tools` 的 JSONL，文本题也可能需要当前入口不具备的联网能力。`review_queue.jsonl` 保存需人工复核的预测。
-
-为避免单次模型回复过长，评测默认将主模型每次回复限制为 2048 token，可用 `--max-output-tokens` 调整；`--max-cost` 是回复完成后的估算检查，不能代替单次输出上限。
-
-样例仅用于确认评测链路；论文数字以论文原文为准；自行评测的方式与结果口径见 [运行可靠性说明](docs/runtime-hardening.md)。
-
-### 开发验证
-
-Python 回归测试使用模拟模型，不请求付费模型：
-
-```bash
-source .venv/bin/activate
-python -m unittest discover -s tests -q
-```
-
-仅检查 Web 后端时：
-
-```bash
-python -m unittest discover -s tests -p 'test_web*.py' -q
-```
-
-前端语法和单元测试使用 Node.js（CI 使用 Node.js 22），无需安装 npm 包：
-
-```bash
-node --check web/app.js
-node --test web/tests/*.test.mjs
-```
-
-测试覆盖会话增量、草稿与附件、聊天滚动、Markdown 排版，以及 Web 权限与 HTTP 访问边界。模型效果和 Skill 泛化能力需要另行评测。
-
-带固定初始状态、允许工具、预算和程序化检查的编码任务样本放在 [tests/fixtures/tasks](tests/fixtures/tasks/README.md)；执行 `python -m unittest tests.test_task_fixtures` 会校验每个样本在未解决时验收失败、套用参考解后验收通过。
+### 文档
+
+| 主题 | 文档 |
+| --- | --- |
+| 架构与目录结构 | [docs/reference/architecture.md](docs/reference/architecture.md) |
+| Skills：格式、自进化、回归评测 | [docs/guide/skills.md](docs/guide/skills.md) |
+| 会话、权限与运行边界 | [docs/guide/permissions.md](docs/guide/permissions.md) |
+| 折叠对照与评测口径 | [docs/guide/evaluation.md](docs/guide/evaluation.md) |
+| 开发与验证 | [docs/guide/development.md](docs/guide/development.md) |
+| 命令行、配置、调度、Web、数据集 | [docs/README.md](docs/README.md) |
 
 ### 迭代计划与进度
 
-迭代计划分为八个迭代（I0–I7），共 21 个任务和 6 个按评审单元拆分的 PR。首版范围是 **I0–I2**：让本地代码修改在动手前可审阅、改动后可恢复。
+迭代计划分为八个迭代（I0–I7），共 21 个任务和 6 个按评审单元拆分的 PR。
 
 | 迭代 | 任务数 | 已交付 |
 | --- | --- | --- |
 | I0 基线与开发环境 | 2 | 2 |
 | I1 访问范围与修改审阅 | 3 | 3 |
 | I2 文件快照与撤销 | 2 | 2 |
-| I3–I7 代码理解、隔离执行、工具、学习、自动化 | 14 | 6 |
+| I3 代码理解与任务夹具 | 3 | 3 |
+| I4 隔离执行 | 2 | 2 |
+| I5 浏览器与远程工具 | 3 | 3 |
+| I6 学习与自动化 | 3 | 3 |
+| I7 打包与发布 | 3 | 3 |
 
-当前进度：**21 个任务已完成 13 个**，I0–I4 全部完成，I5 已从类型化工具结果开始；容器内行为仍需在有 Docker 的机器上验证。[计划表](docs/iteration-roadmap-2026-10-19.md)定义每个任务及其验收标准，[进度表](docs/iteration-progress.md)记录已交付内容、对应的验证证据，以及尚未闭合的缺陷。
+当前进度：**21 个任务全部完成**，已发布 **v1.0.0**。仍有两项需要在其他环境验证：容器内行为与真实远程 MCP 服务端。[计划表](docs/iteration-roadmap-2026-10-19.md)定义每个任务及其验收标准，[进度表](docs/iteration-progress.md)记录已交付内容、对应的验证证据，以及尚未闭合的缺陷。
 
 ### 更多文档
 
-- [Web 工作台：界面功能、启动与运行边界](docs/web-workspace.md)
+其余文档都在 [docs/](docs/README.md)，索引里写明每份文档回答什么问题：
+
+- [文档索引](docs/README.md)
+- [架构与目录结构](docs/reference/architecture.md)
+- [Skills：格式、自进化、回归评测](docs/guide/skills.md)
+- [会话、权限与运行边界](docs/guide/permissions.md)
+- [评测口径](docs/guide/evaluation.md)
+- [开发与验证](docs/guide/development.md)
 - [运行可靠性与 Skills 发布流程](docs/runtime-hardening.md)
+- [Web 工作台](docs/web-workspace.md)
 - [版本记录](CHANGELOG.md)
-- [项目迭代计划表（2026-10-19）](docs/iteration-roadmap-2026-10-19.md)
-- [迭代进度表：已交付任务与未闭合风险](docs/iteration-progress.md)
-- [T01 环境基线：Python 环境与测试结果（2026-10-20）](docs/t01-environment-baseline-2026-10-20.md)
-- [最近修改记录（2026-10-15）](最近修改记录-2026-10-15.md)
 
 ### 项目来源与署名
 
