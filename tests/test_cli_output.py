@@ -119,6 +119,26 @@ class StreamTests(unittest.TestCase):
         self.assertEqual(seen, ["abc"])
         self.assertEqual(stdout.getvalue(), "abc")
 
+    def test_unencodable_characters_degrade_instead_of_crashing(self) -> None:
+        """A Windows console cannot draw the spinner's braille frames."""
+
+        class GbkStream(io.StringIO):
+            encoding = "gbk"
+
+            def write(self, text: str) -> int:
+                text.encode("gbk")  # same failure a real console raises
+                return super().write(text)
+
+        stream = GbkStream()
+        old = ui._stream
+        ui._stream = stream
+        try:
+            ui._safe_stdout_write("\u280b spinner")
+        finally:
+            ui._stream = old
+
+        self.assertIn("spinner", stream.getvalue())
+
     def test_a_broken_sink_does_not_break_output(self) -> None:
         stdout = io.StringIO()
         old_out = sys.stdout

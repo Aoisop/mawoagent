@@ -33,6 +33,54 @@ def _open_lock_file(path: Path):
 
 
 @contextmanager
+def try_state_lock(path: Path):
+    """Non-blocking variant of :func:`state_lock`; yields whether it was taken.
+
+    A scheduler must decide what to do when a run is already in progress rather
+    than waiting behind it, so the answer has to be returned, not blocked on.
+    """
+
+    path = Path(path).resolve()
+    key = str(path)
+    with _locks_guard:
+        lock = _locks.setdefault(key, threading.RLock())
+    if not lock.acquire(blocking=False):
+        yield False
+        return
+    try:
+        held = getattr(_held, "paths", None)
+        if held is None:
+            held = _held.paths = set()
+        if key in held:
+            yield True
+            return
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with _open_lock_file(path) as stream:
+            if os.name == "nt":
+                import msvcrt
+                stream.seek(0)
+                try:
+                    msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+                except OSError:
+                    yield False
+                    return
+            else:
+                import fcntl
+                try:
+                    fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                except OSError:
+                    yield False
+                    return
+            held.add(key)
+            try:
+                yield True
+            finally:
+                held.discard(key)
+    finally:
+        lock.release()
+
+
+@contextmanager
 def state_lock(path: Path):
     """Lock the entire read/modify/write operation, including across processes.
 

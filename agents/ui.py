@@ -53,8 +53,28 @@ def _safe_text(value: object) -> str:
 
 
 def _safe_stdout_write(text: object) -> None:
-    _stream.write(_safe_text(text))
-    _stream.flush()
+    """Write without ever raising: a spinner frame must not end the process.
+
+    A Windows console defaults to the ANSI code page, and the spinner draws
+    braille characters that it cannot represent. Degrading those characters is
+    acceptable; dying because of them is not.
+    """
+
+    data = _safe_text(text)
+    try:
+        _stream.write(data)
+    except UnicodeEncodeError:
+        encoding = getattr(_stream, "encoding", None) or "utf-8"
+        try:
+            _stream.write(data.encode(encoding, errors="replace").decode(encoding, errors="replace"))
+        except (OSError, ValueError, LookupError):
+            return
+    except (OSError, ValueError):
+        return
+    try:
+        _stream.flush()
+    except (OSError, ValueError):
+        pass
 
 
 COOKIE_ART = r"""
