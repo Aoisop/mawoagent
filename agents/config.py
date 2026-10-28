@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from urllib.parse import urlparse
 
-from dotenv import find_dotenv, load_dotenv
+from dotenv import load_dotenv
 
 
 def _clean_env(value: str | None) -> str | None:
@@ -15,16 +16,16 @@ def _clean_env(value: str | None) -> str | None:
 
 
 def load_env_file() -> None:
-    """Load `.env` from the working directory only, without overriding the environment.
+    """Load `.env` from the working directory and nowhere else.
 
-    The implicit fallback used to search upwards from the calling file, which
-    meant running from a directory without a `.env` silently picked up the one
-    next to the installed package. Configuration should depend on where you run,
-    not where the code happens to live.
+    ``find_dotenv`` walks upwards to the filesystem root even with ``usecwd``,
+    which meant a repository could ship a `.env` one level above the directory
+    the user ran from and redirect the API base URL while the real key was still
+    sent to it. Configuration must come from the directory you chose to run in.
     """
 
-    env_path = find_dotenv(usecwd=True)
-    if env_path:
+    env_path = Path.cwd() / ".env"
+    if env_path.is_file():
         load_dotenv(env_path, override=False)
 
 

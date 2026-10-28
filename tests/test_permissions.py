@@ -62,5 +62,26 @@ class PermissionTests(unittest.TestCase):
         self.assertEqual(agent._confirm_dangerous.await_count, 6)
 
 
+class DenyRuleTests(unittest.TestCase):
+    """A deny rule is a decision about what may happen, not about whether to ask."""
+
+    def test_a_deny_rule_survives_bypass_permissions(self) -> None:
+        with patch("agents.tools._check_permission_rules", return_value="deny"):
+            for mode in ("default", "acceptEdits", "dontAsk", "bypassPermissions"):
+                with self.subTest(mode=mode):
+                    verdict = check_permission("run_shell", {"command": "rm -rf /"}, mode)
+                    self.assertEqual(verdict["action"], "deny")
+
+    def test_discovery_results_still_honour_deny_under_bypass(self) -> None:
+        from pathlib import Path
+
+        from agents.tools import _discovery_path_filter
+
+        rules = {"allow": [], "deny": [{"tool": "read_file", "pattern": "*"}]}
+        with patch("agents.tools.load_permission_rules", return_value=rules):
+            allowed = _discovery_path_filter("grep_search", "bypassPermissions")
+        self.assertFalse(allowed(Path("secrets.txt")))
+
+
 if __name__ == "__main__":
     unittest.main()

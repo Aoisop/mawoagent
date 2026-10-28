@@ -12,6 +12,8 @@ from unittest.mock import patch
 
 from agents import snapshots, tools
 from agents.snapshots import (
+    Entry,
+    Turn,
     begin_turn,
     build_diff,
     current_recorder,
@@ -209,6 +211,60 @@ class UndoTests(SnapshotTestCase):
         self.assertEqual(second["restored"], [])
         self.assertEqual(second["conflicts"], ["app.py"])
         self.assertEqual(path.read_text(encoding="utf-8"), "original\n")
+
+
+class TamperedMetaTests(SnapshotTestCase):
+    """meta.json is state on disk; a path read from it is not trusted."""
+
+    def turn_with(self, path: str, digest: str | None, *, existed: bool = True,
+                  after_sha: str | None = None) -> Turn:
+        directory = Path(self.root) / ".mawoagent" / "snapshots" / "s" / "turn-1"
+        (directory / "blobs").mkdir(parents=True, exist_ok=True)
+        payload = b"LEAKED"
+        if digest is not None:
+            (directory / "blobs" / digest).write_bytes(payload)
+        return Turn(
+            turn_id="t", session_id="s", index=1, started_at=0, finished_at=1, status="complete",
+            entries=[Entry(path=path, existed_before=existed, before_sha=digest, after_sha=after_sha)],
+            directory=directory,
+        )
+
+    def test_undo_refuses_a_relative_path_that_leaves_the_workspace(self) -> None:
+        turn = self.turn_with("../../escaped.txt", "0" * 64)
+        result = undo_turn(turn, self.root)
+
+        self.assertEqual(result["restored"], [])
+        self.assertTrue(any("outside the workspace" in item for item in result["skipped"]))
+        self.assertFalse((Path(self.root).parent / "escaped.txt").exists())
+
+    def test_undo_refuses_an_absolute_path(self) -> None:
+        outside = Path(self.root).parent / "absolute-escape.txt"
+        turn = self.turn_with(str(outside), "0" * 64)
+        result = undo_turn(turn, self.root)
+
+        self.assertEqual(result["restored"], [])
+        self.assertFalse(outside.exists())
+
+    def test_a_normal_relative_path_still_restores(self) -> None:
+        target = Path(self.root) / "notes.txt"
+        target.write_text("from the turn\n", encoding="utf-8")
+        digest = snapshots._sha(b"original\n")
+        # Hash the bytes as written: text mode translates newlines on Windows.
+        turn = self.turn_with("notes.txt", digest, after_sha=snapshots._sha(target.read_bytes()))
+        (turn.directory / "blobs" / digest).write_bytes(b"original\n")
+
+        result = undo_turn(turn, self.root)
+        self.assertEqual(result["restored"], ["notes.txt"])
+        self.assertEqual(target.read_text(encoding="utf-8"), "original\n")
+
+    def test_a_digest_that_is_not_a_sha256_is_not_read(self) -> None:
+        turn = self.turn_with("notes.txt", "../../../secret.txt")
+        self.assertIsNone(snapshots._blob(turn, "../../../secret.txt"))
+
+    def test_diff_does_not_leak_through_a_bad_digest(self) -> None:
+        turn = self.turn_with("notes.txt", "../../../secret.txt")
+        (turn.directory / "secret.txt").write_text("TOPSECRET", encoding="utf-8")
+        self.assertNotIn("TOPSECRET", build_diff(turn))
 
 
 class ToolIntegrationTests(SnapshotTestCase):

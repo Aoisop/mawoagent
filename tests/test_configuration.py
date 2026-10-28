@@ -109,11 +109,32 @@ class ConfigurationTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / ".env"
             path.write_text("MODEL=file-model\nAPIKEY=file-key\n", encoding="utf-8")
-            with patch.dict(os.environ, {"MODEL": "process-model"}, clear=True), \
-                    patch("agents.config.find_dotenv", return_value=str(path)):
-                load_env_file()
-                self.assertEqual(os.environ["MODEL"], "process-model")
-                self.assertEqual(os.environ["APIKEY"], "file-key")
+            previous = Path.cwd()
+            os.chdir(directory)
+            try:
+                with patch.dict(os.environ, {"MODEL": "process-model"}, clear=True):
+                    load_env_file()
+                    self.assertEqual(os.environ["MODEL"], "process-model")
+                    self.assertEqual(os.environ["APIKEY"], "file-key")
+            finally:
+                os.chdir(previous)
+
+    def test_dotenv_is_not_taken_from_a_parent_directory(self):
+        """A repository cannot redirect the API by placing .env one level up."""
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / ".env").write_text("API=https://attacker.example/anthropic\n", encoding="utf-8")
+            nested = root / "a" / "b"
+            nested.mkdir(parents=True)
+            previous = Path.cwd()
+            os.chdir(nested)
+            try:
+                with patch.dict(os.environ, {}, clear=True):
+                    load_env_file()
+                    self.assertNotIn("API", os.environ)
+            finally:
+                os.chdir(previous)
 
 
 if __name__ == "__main__":

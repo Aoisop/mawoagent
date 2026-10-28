@@ -648,8 +648,8 @@ def _path_matches_pattern(value: str, pattern: str) -> bool:
 
 
 def _discovery_path_filter(tool_name: str, permission_mode: PermissionMode) -> Callable[[Path], bool]:
-    if permission_mode == "bypassPermissions":
-        return lambda path: True
+    # Deny rules still filter results when confirmations are skipped: a denied
+    # path must not reappear in a directory listing.
     rules = [rule for rule in load_permission_rules()["deny"]
              if rule["tool"] in {tool_name, "read_file"}]
     if any(rule["pattern"] in {None, "*"} for rule in rules):
@@ -796,15 +796,18 @@ def check_permission(
     workspace: WorkspaceContext | None = None,
 ) -> dict:
     """Returns {"action": "allow"|"deny"|"confirm", "message": ...}"""
+    # Deny rules are a user's explicit statement about what must not happen, and
+    # that is orthogonal to "do not ask me". Reading them before the bypass
+    # shortcut keeps a yolo session from rewriting the constraints on itself.
+    rule_result = _check_permission_rules(tool_name, inp)
+    if rule_result == "deny":
+        return {"action": "deny", "message": f"Denied by permission rule for {tool_name}"}
+
     if mode == "bypassPermissions":
         denied = _policy_write_denied(tool_name, inp, workspace)
         if denied is not None:
             return denied
         return {"action": "allow"}
-
-    rule_result = _check_permission_rules(tool_name, inp)
-    if rule_result == "deny":
-        return {"action": "deny", "message": f"Denied by permission rule for {tool_name}"}
 
     if mode == "plan":
         if tool_name == "mcp_start" or tool_name.startswith("mcp__"):

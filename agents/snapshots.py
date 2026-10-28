@@ -23,6 +23,7 @@ import difflib
 import hashlib
 import json
 import os
+import re
 import shutil
 import time
 from contextlib import contextmanager
@@ -398,8 +399,15 @@ def latest_turn(session_id: str, root: Path | str, skip: int = 0) -> Turn | None
     return turns[-1 - skip]
 
 
+_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
 def _blob(turn: Turn, digest: str | None) -> bytes | None:
     if not digest or turn.directory is None:
+        return None
+    # The digest is read back from meta.json. Anything that is not a sha256 is
+    # either corruption or an attempt to walk out of the blob directory.
+    if not _DIGEST_RE.fullmatch(digest):
         return None
     path = turn.directory / "blobs" / digest
     try:
@@ -442,6 +450,7 @@ def undo_turn(turn: Turn, root: Path | str) -> dict:
     """Restore the turn's before-images where the files are still untouched."""
 
     workspace = Path(root)
+    workspace_root = workspace.resolve()
     restored: list[str] = []
     removed: list[str] = []
     conflicts: list[str] = []
@@ -452,7 +461,14 @@ def undo_turn(turn: Turn, root: Path | str) -> dict:
             skipped.append(f"{entry.path}: {entry.note}")
             continue
 
-        target = workspace / entry.path
+        # entry.path comes from meta.json on disk. A path that leaves the
+        # workspace is not a rollback, it is a write primitive.
+        try:
+            target = (workspace / entry.path).resolve()
+            target.relative_to(workspace_root)
+        except (ValueError, OSError):
+            skipped.append(f"{entry.path}: outside the workspace")
+            continue
         try:
             current = target.read_bytes() if target.exists() else None
         except OSError as exc:
