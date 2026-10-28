@@ -61,8 +61,10 @@ class MemoryEntry:
 
 
 def _project_hash() -> str:
-    """用当前工作目录生成稳定 hash，让不同项目的记忆互相隔离。"""
-    return hashlib.sha256(str(Path.cwd()).encode()).hexdigest()[:16]
+    """Stable hash of the project root, so two workspaces never share memories."""
+    from .workspace import project_root
+
+    return hashlib.sha256(str(project_root()).encode()).hexdigest()[:16]
 
 
 def get_memory_dir() -> Path:

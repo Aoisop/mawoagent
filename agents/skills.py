@@ -80,7 +80,10 @@ def get_skill_by_name(skill_name:str)->SkillDefinition | None:
 
 def discover_skills() -> list[SkillDefinition]:
     global _cached_skills, _cached_skill_signature
-    roots = [Path.home() / ".mawoagent" / "skills", Path.cwd() / ".mawoagent" / "skills"]
+    from .workspace import project_root
+
+    project = project_root()
+    roots = [Path.home() / ".mawoagent" / "skills", project / ".mawoagent" / "skills"]
     signature = []
     for root in roots:
         for path in sorted(root.glob("*/SKILL.md")):
@@ -89,7 +92,9 @@ def discover_skills() -> list[SkillDefinition]:
                 signature.append((str(path.resolve()), info.st_mtime_ns, info.st_size, info.st_ino))
             except OSError:
                 continue
-    signature = (str(Path.cwd().resolve()), tuple(signature))
+    # The project is part of the cache key: another workspace may hold skills
+    # with the same file timestamps.
+    signature = (str(project.resolve()), tuple(signature))
     if _cached_skills is not None and signature == _cached_skill_signature:
         return _cached_skills
 
@@ -97,8 +102,8 @@ def discover_skills() -> list[SkillDefinition]:
     # 用户级 skills 优先级最高：~/.mawoagent/skills/<name>/SKILL.md
     user_dir = Path.home() / ".mawoagent" / "skills"
     _load_skills_from_dir(user_dir, "user", skills)
-    # 项目级 skills 优先级较低：<cwd>/.mawoagent/skills/<name>/SKILL.md
-    project_dir = Path.cwd() / ".mawoagent" / "skills"
+    # 项目级 skills 优先级较低：<project>/.mawoagent/skills/<name>/SKILL.md
+    project_dir = project / ".mawoagent" / "skills"
     _load_skills_from_dir(project_dir, "project", skills, overwrite=False)
 
     _cached_skills = list(skills.values())

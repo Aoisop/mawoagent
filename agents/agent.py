@@ -19,7 +19,7 @@ import openai
 from agents.mcp_client import BorrowedMcpManager, McpManager
 from agents.policy import load_security_policy
 from agents.snapshots import begin_turn, finish_turn
-from agents.workspace import WorkspaceContext
+from agents.workspace import WorkspaceContext, bind_workspace, reset_workspace
 from .background_jobs import BackgroundSkillTasks
 from .tool_runtime import ToolExecution
 from .context_runtime import ContextRuntime
@@ -494,8 +494,11 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
         recorder, snapshot_token = begin_turn(
             self.session_id, self.workspace.root, enabled=not self.is_sub_agent
         )
-        self._current_task = asyncio.create_task(self._chat_turn(user_message))
+        # State such as memory and sessions is keyed by project root; binding it
+        # here makes the whole turn, not just each tool call, resolve correctly.
+        workspace_token = bind_workspace(self.workspace)
         try:
+            self._current_task = asyncio.create_task(self._chat_turn(user_message))
             await self._current_task
         except asyncio.CancelledError:
             user_abort = self._aborted
@@ -505,6 +508,7 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
             if not user_abort:
                 raise
         finally:
+            reset_workspace(workspace_token)
             finish_turn(
                 recorder,
                 snapshot_token,

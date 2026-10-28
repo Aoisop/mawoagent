@@ -557,18 +557,21 @@ class McpManager:
 
     def _load_configs(self) -> dict[str, dict]:
         """按优先级加载并合并 MCP Server 配置。"""
+        from .workspace import project_root
+
         merged: dict[str, dict] = {}
+        project = project_root()
 
         # 1. 全局配置：~/.mawoagent/settings.json
         global_path = Path.home() / ".mawoagent" / "settings.json"
         self._merge_config_file(global_path, merged)
 
-        # 2. 当前项目配置：<cwd>/.mawoagent/settings.json
-        project_path = Path.cwd() / ".mawoagent" / "settings.json"
+        # 2. 当前项目配置：<project>/.mawoagent/settings.json
+        project_path = project / ".mawoagent" / "settings.json"
         self._merge_config_file(project_path, merged)
 
-        # 3. Claude Code 约定配置：<cwd>/.mcp.json
-        mcp_json_path = Path.cwd() / ".mcp.json"
+        # 3. Claude Code 约定配置：<project>/.mcp.json
+        mcp_json_path = project / ".mcp.json"
         self._merge_config_file(mcp_json_path, merged)
 
         return merged

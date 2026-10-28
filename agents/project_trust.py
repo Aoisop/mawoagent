@@ -12,8 +12,14 @@ def trust_file() -> Path:
     return Path.home() / ".mawoagent" / "trusted-projects.json"
 
 
+def _default_project() -> Path:
+    from .workspace import project_root
+
+    return project_root().resolve()
+
+
 def project_fingerprint(project: Path | None = None) -> str:
-    project = (project or Path.cwd()).resolve()
+    project = (project or _default_project()).resolve()
     digest = hashlib.sha256(str(project).encode())
     for relative in (".mawoagent/settings.json", ".mcp.json"):
         path = project / relative
@@ -23,7 +29,7 @@ def project_fingerprint(project: Path | None = None) -> str:
 
 
 def is_project_trusted(project: Path | None = None) -> bool:
-    project = (project or Path.cwd()).resolve()
+    project = (project or _default_project()).resolve()
     try:
         records = json.loads(trust_file().read_text(encoding="utf-8"))
         return records.get(str(project)) == project_fingerprint(project)
@@ -32,7 +38,7 @@ def is_project_trusted(project: Path | None = None) -> bool:
 
 
 def trust_project(project: Path | None = None) -> None:
-    project = (project or Path.cwd()).resolve()
+    project = (project or _default_project()).resolve()
     path = trust_file()
     with state_lock(path):
         records = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}

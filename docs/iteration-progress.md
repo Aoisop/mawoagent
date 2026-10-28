@@ -9,9 +9,9 @@
 | 指标 | 数值 |
 | --- | --- |
 | 计划任务 | 21（T01–T21） |
-| 已交付 | 19（T01–T08、T10–T19） |
+| 已交付 | 20（T01–T08、T10–T20） |
 | 进行中 | 0 |
-| 未开始 | 2 |
+| 未开始 | 1 |
 | 迭代完成 | 4 / 8（I0、I1、I2、I3） |
 | 首版范围 I0–I2 | 7 / 7 任务（完成） |
 | PR 完成 | 6 / 6（PR-01–PR-06） |
@@ -52,7 +52,7 @@
 | T17 记忆管理工具 | I6 | ✅ | `agents/memory.py`、`agents/tool_schemas.py`、`agents/tools.py` | `memory_save`/`memory_search`/`memory_archive`/`memory_restore`；来源（user/repo/inference）与作用域写入 frontmatter 并显示在索引中；归档目录可恢复且不参与召回；常驻索引按条数、行数、字节三重上限 |
 | T18 审计钩子 | I6 | ✅ | `agents/audit.py`、`agents/tool_runtime.py`、`agents/web.py` | 每次工具调用写 start/end 两条 JSONL（未结束即崩溃的形态可见）；参数脱敏并截断；订阅者只拿到冻结事件、返回值被忽略；日志不可写或订阅者抛错都不影响调用；`GET /api/sessions/<id>/audit` 只读查看 |
 | T19 JSONL 输出与退出码 | I7 | ✅ | `agents/output.py`、`agents/main.py`、`agents/ui.py` | `--output-format text\|json\|jsonl`；stdout 只放记录、界面转 stderr；退出码 0/1/2/3/130 区分成功、错误、用法、预算超限与取消；无 prompt 时拒绝结构化模式 |
-| T20 实例状态隔离 | I7 | ⬜ | — | 大量模块仍直接读取 `Path.cwd()` |
+| T20 实例状态隔离 | I7 | ✅ | `agents/workspace.py`、`memory.py`、`session.py`、`skills.py`、`subagent.py`、`skill_evolution.py`、`tools.py`、`project_trust.py`、`mcp_client.py`、`agent.py` | 新增 `project_root()`：有绑定工作区时用它，否则回退进程目录；记忆、会话、技能、自定义代理、进化目录、权限规则、项目信任与 MCP 配置全部改由它决定；`chat()` 在创建任务前绑定工作区，整轮生效；缓存键包含项目根，切换工作区会重算 |
 | T21 OS 级自动调度 | I7 | ⬜ | — | 未开始 |
 
 ## PR 进度
@@ -68,7 +68,7 @@
 
 ## 下一步
 
-**I0–I4 已全部交付**（容器内行为仍需在有 Docker 的机器上验证）。**I5–I6 已全部交付**。I7 已交付结构化输出与退出码，剩实例隔离与调度。 I3 的 T09 提供了可运行的评测入口，但 fixture 目前仍是 5 个（计划要求 20–30 个），且真实对照需要模型密钥，不属于 CI 范围。下一步是 I4 隔离执行，它是无人值守写入的前置条件。
+**I0–I4 已全部交付**（容器内行为仍需在有 Docker 的机器上验证）。**I5–I6 已全部交付**。I7 已交付结构化输出与实例隔离，只剩可选的 OS 调度接入。 I3 的 T09 提供了可运行的评测入口，但 fixture 目前仍是 5 个（计划要求 20–30 个），且真实对照需要模型密钥，不属于 CI 范围。下一步是 I4 隔离执行，它是无人值守写入的前置条件。
 
 仍未闭合的两处界面/接口落差：T07 的 Web 端只有接口、没有按钮；授权卡片里的 diff 是纯文本，没有按增删着色。
 
@@ -85,7 +85,7 @@
 
 | 口径 | 结果 |
 | --- | --- |
-| 完整套件 | 524 个用例，`OK (skipped=9)`，约 240 秒 |
+| 完整套件 | 532 个用例，`OK (skipped=9)`，约 240 秒 |
 | CI 矩阵 | 3 个平台 × Python 3.11/3.12 加前端作业，最近一次（run #21）全部通过 |
 | 前端 | `node --check web/app.js` 通过；30 个单测通过 |
 | 跳过原因 | 2 个符号链接用例（Windows 需开发者模式）；其余为既有平台条件跳过 |

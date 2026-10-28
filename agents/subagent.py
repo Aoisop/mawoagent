@@ -87,7 +87,10 @@ _cached_agent_signature = None
 def _discover_custom_agents() -> dict[str, dict]:
     """发现用户级和项目级自定义代理，并按代理名称返回配置。"""
     global _cached_custom_agents, _cached_agent_signature
-    roots = [Path.home() / ".mawoagent" / "agents", Path.cwd() / ".mawoagent" / "agents"]
+    from .workspace import project_root
+
+    project = project_root()
+    roots = [Path.home() / ".mawoagent" / "agents", project / ".mawoagent" / "agents"]
     signature = []
     for root in roots:
         for path in sorted(root.glob("*.md")):
@@ -96,7 +99,7 @@ def _discover_custom_agents() -> dict[str, dict]:
                 signature.append((str(path.resolve()), info.st_mtime_ns, info.st_size, info.st_ino))
             except OSError:
                 continue
-    signature = (str(Path.cwd().resolve()), tuple(signature))
+    signature = (str(project.resolve()), tuple(signature))
     if _cached_custom_agents is not None and signature == _cached_agent_signature:
         return _cached_custom_agents
 
@@ -104,7 +107,7 @@ def _discover_custom_agents() -> dict[str, dict]:
     # User-level (lower priority)
     _load_agents_from_dir(Path.home() / ".mawoagent" / "agents", agents)
     # Project-level (higher priority, overwrites)
-    _load_agents_from_dir(Path.cwd() / ".mawoagent" / "agents", agents)
+    _load_agents_from_dir(project / ".mawoagent" / "agents", agents)
 
     _cached_custom_agents = agents
     _cached_agent_signature = signature

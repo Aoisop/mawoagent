@@ -21,7 +21,9 @@ def _ensure_dir() -> None:
 
 
 def get_project_session_dir() -> Path:
-    d = Path.cwd() / ".mawoagent" / "sessions"
+    from .workspace import project_root
+
+    d = project_root() / ".mawoagent" / "sessions"
     d.mkdir(parents=True, exist_ok=True)
     return d
 

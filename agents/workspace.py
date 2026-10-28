@@ -215,6 +215,19 @@ def current_workspace() -> WorkspaceContext | None:
     return _current_workspace.get()
 
 
+def project_root() -> Path:
+    """The project a piece of state belongs to.
+
+    State used to be keyed by the process working directory, so two sessions
+    with different workspaces in one process shared memory, skills and session
+    folders. Inside a run the bound workspace is the answer; outside one (CLI
+    startup, tooling) the process directory still is.
+    """
+
+    workspace = _current_workspace.get()
+    return workspace.root if workspace is not None else Path.cwd()
+
+
 def bind_workspace(context: WorkspaceContext | None) -> Token:
     return _current_workspace.set(context)
 

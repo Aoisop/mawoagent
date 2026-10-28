@@ -21,7 +21,9 @@ HISTORY_DIR = "history"
 
 
 def get_evolution_dir() -> Path:
-    return Path.cwd() / ".mawoagent" / "skill-evolution"
+    from .workspace import project_root
+
+    return project_root() / ".mawoagent" / "skill-evolution"
 
 
 def _utc_now() -> str:
@@ -233,7 +235,7 @@ def resolve_skill_file(skill_name: str, *, target: str = "active", active_dir: s
             return skill_file
 
     if target in ("project", "active"):
-        found = _find_skill_file_by_name(Path.cwd() / ".mawoagent" / "skills", skill_name)
+        found = _find_skill_file_by_name(_skills_root("project"), skill_name)
         if found:
             return found
 
@@ -246,10 +248,12 @@ def resolve_skill_file(skill_name: str, *, target: str = "active", active_dir: s
 
 
 def _skills_root(target: str) -> Path:
+    from .workspace import project_root
+
     target = (target or "project").strip().lower()
     if target == "user":
         return Path.home() / ".mawoagent" / "skills"
-    return Path.cwd() / ".mawoagent" / "skills"
+    return project_root() / ".mawoagent" / "skills"
 
 
 def _normalize_context(context: str | None) -> str:

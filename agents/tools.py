@@ -570,14 +570,19 @@ _cached_rules_signature = None
 def load_permission_rules() -> dict:
     global _cached_rules, _cached_rules_signature
     from .project_trust import is_project_trusted, trust_file
-    paths = [Path.home() / ".mawoagent" / "settings.json", Path.cwd() / ".mawoagent" / "settings.json",
-             Path.cwd() / ".mcp.json", trust_file()]
+    from .workspace import project_root
+
+    # Rules belong to the project being worked on, not to the process directory:
+    # a second workspace in the same process must not inherit the first's rules.
+    project = project_root()
+    paths = [Path.home() / ".mawoagent" / "settings.json", project / ".mawoagent" / "settings.json",
+             project / ".mcp.json", trust_file()]
     def signature(path):
         try:
             return hashlib.sha256(path.read_bytes()).hexdigest()
         except OSError:
             return None
-    current_signature = (str(Path.cwd().resolve()), *(signature(path) for path in paths))
+    current_signature = (str(project.resolve()), *(signature(path) for path in paths))
     if _cached_rules is not None and _cached_rules_signature == current_signature:
         return _cached_rules
 
@@ -585,7 +590,7 @@ def load_permission_rules() -> dict:
     deny: list[dict] = []
 
     user_settings = _load_settings(Path.home() / ".mawoagent" / "settings.json")
-    project_settings = _load_settings(Path.cwd() / ".mawoagent" / "settings.json")
+    project_settings = _load_settings(project / ".mawoagent" / "settings.json")
 
     for settings, trusted in [(user_settings, True), (project_settings, is_project_trusted())]:
         if not settings or "permissions" not in settings:
