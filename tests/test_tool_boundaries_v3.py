@@ -40,7 +40,9 @@ class ToolBoundaryTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(path=value):
                 self.assertEqual(tools.check_permission("read_file", {"file_path": value})["action"], "deny")
         self.assertEqual(tools.check_permission("read_file", {"file_path": "other.txt"})["action"], "allow")
-        self.assertEqual(tools.check_permission("read_file", {"file_path": "alias.txt"}, "bypassPermissions")["action"], "allow")
+        # A deny rule is a statement about what may happen, not about whether to
+        # ask; skipping confirmations must not make a denied path readable.
+        self.assertEqual(tools.check_permission("read_file", {"file_path": "blocked.txt"}, "bypassPermissions")["action"], "deny")
 
     async def test_discovery_path_rules_and_directory_prefix_keep_boundaries(self):
         for name in ("grep_search", "list_files"):
@@ -84,8 +86,9 @@ class ToolBoundaryTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("SECRET", search)
         self.assertIn("visible", search)
         self.assertNotIn(blocked, opened)
+        # Same rule under bypass: the denied file stays out of discovery results.
         bypass = await tools.execute_tool("grep_search", {"pattern": "needle"}, permission_mode="bypassPermissions")
-        self.assertIn("SECRET", bypass)
+        self.assertNotIn("SECRET", bypass)
 
     @unittest.skipIf(os.name == "nt", "Symlinks require additional Windows privileges")
     async def test_denied_directory_cannot_be_entered_through_glob_or_symlink(self):
