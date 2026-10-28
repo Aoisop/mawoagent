@@ -256,7 +256,10 @@ class OsEntryTests(unittest.TestCase):
         schedule.save_spec(self.spec)
         entry = schedule.install("nightly", apply=False)
         self.assertFalse(entry["applied"])
-        self.assertNotIn(str(self.spec.workspace / ".mawoagent"), entry["content"])
+        # The renderer returns text; nothing is written and nothing is scheduled.
+        self.assertNotIn("runs", entry)
+        self.assertFalse((schedule.schedules_root() / "runs").exists())
+        self.assertEqual(schedule.read_runs("nightly"), [])
 
     def test_non_fixed_times_are_refused_where_the_platform_needs_them(self) -> None:
         flexible = ScheduleSpec(name="flex", prompt="p", workspace=Path(self.tmp.name), cron="*/15 * * * *")
