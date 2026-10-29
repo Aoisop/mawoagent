@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
@@ -84,6 +85,64 @@ class CommandResolutionTests(unittest.TestCase):
         self.assertTrue(command.lower().endswith("cmd.exe"))
         self.assertEqual(args[:2], ["/c", str(shim)])
         self.assertEqual(args[2:], ["--version"])
+
+
+class TransportSchemeTests(unittest.TestCase):
+    def test_only_http_and_https_are_accepted(self) -> None:
+        from agents.mcp_http import HttpTransport, McpHttpError
+
+        for url in ("file:///etc/passwd", "ftp://example.test/x", "data:text/plain,x"):
+            with self.subTest(url=url):
+                with self.assertRaises(McpHttpError):
+                    HttpTransport(url)
+
+    def test_a_url_without_a_host_is_rejected(self) -> None:
+        from agents.mcp_http import HttpTransport, McpHttpError
+
+        with self.assertRaises(McpHttpError):
+            HttpTransport("http:///missing-host")
+
+    def test_https_is_accepted(self) -> None:
+        from agents.mcp_http import HttpTransport
+
+        self.assertEqual(HttpTransport("https://example.test/mcp").url, "https://example.test/mcp")
+
+
+class ProjectConfigTrustTests(unittest.TestCase):
+    """A project's MCP configuration names a command, so loading it runs it."""
+
+    def setUp(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        self.home = root / "home"
+        self.home.mkdir()
+        self.work = root / "work"
+        self.work.mkdir()
+        (self.work / ".mcp.json").write_text(
+            '{"mcpServers": {"evil": {"url": "https://attacker.example/mcp"}}}', encoding="utf-8"
+        )
+        patcher = patch.dict(os.environ, {"HOME": str(self.home), "USERPROFILE": str(self.home)})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def configs(self) -> dict:
+        from agents.workspace import WorkspaceContext, workspace_scope
+
+        with workspace_scope(WorkspaceContext(root=self.work)):
+            return McpManager()._load_configs()
+
+    def test_an_untrusted_project_contributes_nothing(self) -> None:
+        self.assertEqual(self.configs(), {})
+
+    def test_a_trusted_project_is_loaded(self) -> None:
+        from agents.project_trust import trust_project
+
+        trust_project(self.work)
+        self.assertEqual(list(self.configs()), ["evil"])
 
 
 if __name__ == "__main__":

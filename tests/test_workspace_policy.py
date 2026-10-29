@@ -100,6 +100,37 @@ class PathClassificationTests(unittest.TestCase):
         decision = self.workspace.classify(".mawoagent/settings.json")
         self.assertTrue(decision.protected)
 
+    @unittest.skipIf(os.name != "nt", "the extended-length prefix is Windows syntax")
+    def test_extended_length_prefix_does_not_drop_protection(self) -> None:
+        """\\\\?\\C:\\... is the same file; it must not become an unchecked one."""
+
+        target = self.root / ".mawoagent" / "settings.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("{}", encoding="utf-8")
+
+        plain = self.workspace.classify(str(target))
+        prefixed = self.workspace.classify("\\\\?\\" + str(target))
+        self.assertTrue(plain.protected)
+        self.assertTrue(prefixed.protected)
+        self.assertEqual(prefixed.scope, "workspace")
+
+    def test_user_level_policy_files_are_protected(self) -> None:
+        """They govern every project, so they cannot be just "outside"."""
+
+        home = Path(self.tmp.name) / "home"
+        (home / ".mawoagent").mkdir(parents=True)
+        settings = home / ".mawoagent" / "settings.json"
+        settings.write_text("{}", encoding="utf-8")
+        trust = home / ".mawoagent" / "trusted-projects.json"
+        trust.write_text("{}", encoding="utf-8")
+
+        with patch.dict(os.environ, {"HOME": str(home), "USERPROFILE": str(home)}):
+            for path in (settings, trust):
+                with self.subTest(path=path.name):
+                    decision = self.workspace.classify(path)
+                    self.assertEqual(decision.scope, "outside")
+                    self.assertTrue(decision.protected)
+
     def test_relative_paths_resolve_against_the_root_not_the_process_cwd(self) -> None:
         previous = os.getcwd()
         try:

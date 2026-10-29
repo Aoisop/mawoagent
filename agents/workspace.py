@@ -44,6 +44,27 @@ def _is_unc(value: str) -> bool:
     return value.startswith("\\\\") or value.startswith("//")
 
 
+_EXTENDED_PREFIXES = ("\\\\?\\", "\\\\.\\")
+
+
+def _strip_extended_prefix(value: str) -> str:
+    """Turn ``\\\\?\\C:\\x`` back into ``C:\\x`` before any classification.
+
+    Windows accepts the extended-length prefix on any path, and ``Path`` keeps
+    it. Without this, a protected file addressed that way stops looking like a
+    file inside the workspace and loses its protection.
+    """
+
+    for prefix in _EXTENDED_PREFIXES:
+        if value.startswith(prefix):
+            rest = value[len(prefix):]
+            # \\?\UNC\server\share is a UNC path wearing a different hat.
+            if rest[:4].upper() == "UNC\\":
+                return "\\\\" + rest[4:]
+            return rest
+    return value
+
+
 def _key(value: str) -> str:
     """Comparison form: absolute and case-normalised for the current platform."""
 
@@ -129,7 +150,7 @@ class WorkspaceContext:
         """Resolve *raw* against this workspace, not against the process cwd."""
 
         text = os.fspath(raw) or "."
-        expanded = os.path.expanduser(str(text))
+        expanded = os.path.expanduser(_strip_extended_prefix(str(text)))
 
         if _is_unc(expanded) and not _is_unc(str(self.root)):
             # A UNC path is outside a local workspace by construction. Resolving
@@ -160,6 +181,7 @@ class WorkspaceContext:
                 "outside",
                 resolved,
                 f"outside the workspace root {self.root_real}",
+                protected=self._is_protected_absolute(resolved.real),
             )
 
         relative = (resolved.relative or "").replace("\\", "/")
@@ -177,6 +199,21 @@ class WorkspaceContext:
                 f"runtime state path {relative}",
             )
         return AccessDecision("workspace", resolved, f"inside the workspace: {relative or '.'}")
+
+    def _is_protected_absolute(self, real: str) -> bool:
+        """Files that govern every project, not only the one being edited.
+
+        A user-level settings file sits outside the workspace by definition, so
+        the relative-path check can never see it. It still decides what the
+        runtime may do everywhere, which makes it the most valuable file to
+        rewrite.
+        """
+
+        state = Path.home() / self.state_name
+        for candidate in (state / "settings.json", state / "trusted-projects.json"):
+            if _key(os.path.realpath(str(candidate))) == real:
+                return True
+        return False
 
     def _is_protected(self, relative: str) -> bool:
         # str.lstrip("./") would eat the leading dot of ".mawoagent", so only a

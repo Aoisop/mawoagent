@@ -16,6 +16,9 @@ Deliberate limits, because a remote endpoint is not under our control:
   implemented, and a 401 says so explicitly rather than retrying blindly.
 * A cancelled request sends ``notifications/cancelled``; the server may keep
   working otherwise, and a long-running tool would never learn it was abandoned.
+* Only ``http`` and ``https`` are accepted. ``urllib`` would otherwise honour
+  ``file://`` through its default opener, turning a configured endpoint into an
+  arbitrary local file read.
 """
 
 from __future__ import annotations
@@ -102,6 +105,13 @@ class HttpTransport:
         headers: dict[str, str] | None = None,
         timeout: float = 30.0,
     ):
+        parsed = urllib.parse.urlsplit(str(url))
+        if parsed.scheme not in {"http", "https"}:
+            raise McpHttpError(
+                f"unsupported MCP transport scheme: {parsed.scheme or '(missing)'}; only http and https are allowed"
+            )
+        if not parsed.netloc:
+            raise McpHttpError("MCP url is missing a host")
         self.url = url
         self.token = token
         self.headers = dict(headers or {})

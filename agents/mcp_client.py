@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import shlex
 import shutil
@@ -47,9 +48,12 @@ from .mcp_http import (
     resolve_token,
 )
 from .tool_content import capability_report, from_mcp_content
+
+_logger = logging.getLogger(__name__)
 from .ui import print_error, print_info
 
 MCP_TOOL_TIMEOUT_SECONDS = 60.0
+_logger = logging.getLogger(__name__)
 MCP_MAX_MESSAGE_BYTES = 8 * 1024 * 1024
 
 
@@ -557,6 +561,7 @@ class McpManager:
 
     def _load_configs(self) -> dict[str, dict]:
         """按优先级加载并合并 MCP Server 配置。"""
+        from .project_trust import is_project_trusted
         from .workspace import project_root
 
         merged: dict[str, dict] = {}
@@ -566,13 +571,19 @@ class McpManager:
         global_path = Path.home() / ".mawoagent" / "settings.json"
         self._merge_config_file(global_path, merged)
 
-        # 2. 当前项目配置：<project>/.mawoagent/settings.json
-        project_path = project / ".mawoagent" / "settings.json"
-        self._merge_config_file(project_path, merged)
-
-        # 3. Claude Code 约定配置：<project>/.mcp.json
-        mcp_json_path = project / ".mcp.json"
-        self._merge_config_file(mcp_json_path, merged)
+        # A project configuration names the command to run, so loading it is
+        # already executing it. Untrusted checkouts must not get that far —
+        # otherwise cloning a repository is enough to start its server with the
+        # runtime's own environment, including the API key.
+        project_files = [project / ".mawoagent" / "settings.json", project / ".mcp.json"]
+        if is_project_trusted(project):
+            for path in project_files:
+                self._merge_config_file(path, merged)
+        elif any(path.exists() for path in project_files):
+            _logger.warning(
+                "Ignoring MCP configuration in %s: the project is not trusted. "
+                "Run /trust-project to allow it.", project
+            )
 
         return merged
 
