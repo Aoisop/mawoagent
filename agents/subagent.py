@@ -87,6 +87,7 @@ _cached_agent_signature = None
 def _discover_custom_agents() -> dict[str, dict]:
     """发现用户级和项目级自定义代理，并按代理名称返回配置。"""
     global _cached_custom_agents, _cached_agent_signature
+    from .project_trust import is_project_trusted
     from .workspace import project_root
 
     project = project_root()
@@ -99,19 +100,40 @@ def _discover_custom_agents() -> dict[str, dict]:
                 signature.append((str(path.resolve()), info.st_mtime_ns, info.st_size, info.st_ino))
             except OSError:
                 continue
-    signature = (str(project.resolve()), tuple(signature))
+    signature = (str(project.resolve()), is_project_trusted(project), tuple(signature))
     if _cached_custom_agents is not None and signature == _cached_agent_signature:
         return _cached_custom_agents
 
     agents: dict[str, dict] = {}
     # User-level (lower priority)
     _load_agents_from_dir(Path.home() / ".mawoagent" / "agents", agents)
-    # Project-level (higher priority, overwrites)
-    _load_agents_from_dir(project / ".mawoagent" / "agents", agents)
+    # Project-level (higher priority, overwrites) - only when the checkout is trusted.
+    project_agents = project / ".mawoagent" / "agents"
+    if is_project_trusted(project):
+        _load_agents_from_dir(project_agents, agents)
+    else:
+        _load_agent_names_only(project_agents, agents)
 
     _cached_custom_agents = agents
     _cached_agent_signature = signature
     return agents
+
+
+def _load_agent_names_only(directory: Path, agents: dict[str, dict]) -> None:
+    """Show that a project defines an agent without reading what it says."""
+
+    if not directory.is_dir():
+        return
+    for entry in directory.iterdir():
+        if entry.suffix != ".md" or entry.stem in agents:
+            continue
+        agents[entry.stem] = {
+            "name": entry.stem,
+            "description": "",
+            "allowed_tools": [],
+            "system_prompt": "",
+            "trusted": False,
+        }
 
 
 def _load_agents_from_dir(directory: Path, agents: dict[str, dict]) -> None:
@@ -147,6 +169,11 @@ def get_sub_agent_config(agent_type: str) -> dict:
     """根据代理类型生成 Agent 运行时需要的 system_prompt 和 tools 配置。"""
     custom = _discover_custom_agents().get(agent_type)
     if custom:
+        if not custom.get("trusted", True):
+            raise ValueError(
+                f"agent type {agent_type!r} is defined in this project but was not loaded: "
+                "the project is not trusted. Run /trust-project to enable it."
+            )
         if custom["allowed_tools"] is not None:
             # 自定义代理显式声明工具白名单时，只授予白名单中的工具。
             tools = [t for t in tool_definitions if t["name"] in custom["allowed_tools"] and t["name"] != "agent"]
@@ -177,7 +204,8 @@ def get_available_agent_types() -> list[dict[str, str]]:
         {"name": "general", "description": "Full tools for independent tasks"},
     ]
     for name, defn in _discover_custom_agents().items():
-        types.append({"name": name, "description": defn["description"]})
+        description = defn["description"] if defn.get("trusted", True) else "(not loaded: project is not trusted)"
+        types.append({"name": name, "description": description})
     return types
 
 

@@ -1373,7 +1373,11 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
         self._last_tool_name = ""
 
     async def _execute_agent_tool(self, inp: dict) -> str:
-        config = get_sub_agent_config(inp.get("type", "general"))
+        try:
+            config = get_sub_agent_config(inp.get("type", "general"))
+        except ValueError as exc:
+            # An agent type defined by an untrusted checkout is listed but not runnable.
+            return f"Error: {exc}"
         return await self._run_child_agent(
             agent_type=inp.get("type", "general"),
             description=inp.get("description", "sub-agent task"),

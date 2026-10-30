@@ -32,6 +32,9 @@ class SkillDefinition:
     prompt_template: str = ""
     source: str = "project"  # "project" or "user"
     skill_dir: str = ""
+    # Project skills from an untrusted checkout are listed by name only: their
+    # body is written by whoever wrote the repository.
+    trusted: bool = True
 
 
 # skills 只在首次读取时扫描磁盘，后续复用缓存；修改 skill 后需要重启或 reset。
@@ -74,12 +77,13 @@ def resolve_skill_prompt(skill: SkillDefinition, args: object) -> str:
 def get_skill_by_name(skill_name:str)->SkillDefinition | None:
     # 通过 name 查找 skill；name 来自 frontmatter，没有写时使用目录名。
     for s in discover_skills():
-        if s.name == skill_name:
+        if s.name == skill_name and s.trusted:
             return s
     return None
 
 def discover_skills() -> list[SkillDefinition]:
     global _cached_skills, _cached_skill_signature
+    from .project_trust import is_project_trusted
     from .workspace import project_root
 
     project = project_root()
@@ -93,8 +97,9 @@ def discover_skills() -> list[SkillDefinition]:
             except OSError:
                 continue
     # The project is part of the cache key: another workspace may hold skills
-    # with the same file timestamps.
-    signature = (str(project.resolve()), tuple(signature))
+    # with the same file timestamps. Trust is part of it too, so /trust-project
+    # takes effect without a restart.
+    signature = (str(project.resolve()), is_project_trusted(project), tuple(signature))
     if _cached_skills is not None and signature == _cached_skill_signature:
         return _cached_skills
 
@@ -104,11 +109,38 @@ def discover_skills() -> list[SkillDefinition]:
     _load_skills_from_dir(user_dir, "user", skills)
     # 项目级 skills 优先级较低：<project>/.mawoagent/skills/<name>/SKILL.md
     project_dir = project / ".mawoagent" / "skills"
-    _load_skills_from_dir(project_dir, "project", skills, overwrite=False)
+    if is_project_trusted(project):
+        _load_skills_from_dir(project_dir, "project", skills, overwrite=False)
+    else:
+        _load_untrusted_skill_names(project_dir, skills)
 
     _cached_skills = list(skills.values())
     _cached_skill_signature = signature
     return _cached_skills
+
+def _load_untrusted_skill_names(base_dir: Path, skills: dict[str, SkillDefinition]) -> None:
+    """List project skills without reading them.
+
+    An untrusted checkout can write anything into a SKILL.md, and that text
+    would otherwise become part of the system prompt. The directory name is all
+    that is taken from it, so the user can still see that a skill exists.
+    """
+
+    if not base_dir.is_dir():
+        return
+    for entry in base_dir.iterdir():
+        if not entry.is_dir() or not (entry / "SKILL.md").exists():
+            continue
+        if entry.name in skills:
+            continue
+        skills[entry.name] = SkillDefinition(
+            name=entry.name,
+            description="",
+            source="project",
+            skill_dir=str(entry),
+            trusted=False,
+        )
+
 
 def _load_skills_from_dir( base_dir: Path, source: str, skills:dict[str, SkillDefinition], overwrite: bool = True) -> None:
     # 只加载目录形式的 skill，不加载 .mawoagent/skills/foo.md 这种单文件形式。
@@ -171,9 +203,10 @@ def build_skill_descriptions() -> str:
         lines.append("(No skills are currently registered.)")
         lines.append("")
     # user_invocable=True 的 skill 主要给用户通过 /<name> 手动调用。
-    invocable = [s for s in skills if s.user_invocable]
+    invocable = [s for s in skills if s.user_invocable and s.trusted]
     # user_invocable=False 的 skill 作为自动调用候选，模型根据 when_to_use 决定是否调用 skill 工具。
-    auto_only = [s for s in skills if not s.user_invocable]
+    auto_only = [s for s in skills if not s.user_invocable and s.trusted]
+    untrusted = [s for s in skills if not s.trusted]
 
     if invocable:
         lines.append("User-invocable skills (user types /<name> to invoke):")
@@ -190,6 +223,12 @@ def build_skill_descriptions() -> str:
             lines.append(f"- **{s.name}**: {s.description}")
             if s.when_to_use:
                 lines.append(f"  When to use: {s.when_to_use}")
+        lines.append("")
+
+    if untrusted:
+        lines.append("Project skills not loaded (project is not trusted; run /trust-project to enable):")
+        for s in untrusted:
+            lines.append(f"- {s.name}")
         lines.append("")
 
     lines.append("To invoke a skill programmatically, use the `skill` tool with the skill name and optional arguments.")

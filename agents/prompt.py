@@ -102,10 +102,13 @@ Shell: {{shell}}
 import re as _re
 
 # ─── @include resolution ─────────────────────────────────────
-# Resolves @./path, @~/path, @/path references in CLAUDE.md files.
+# Resolves @./path references inside the project. Absolute and home-relative
+# forms are refused: a repository could otherwise say "@~/.ssh/id_rsa" and have
+# the key read into the system prompt on the first request.
 
 _INCLUDE_RE = _re.compile(r"^@(\./[^\s]+|~/[^\s]+|/[^\s]+)$", _re.MULTILINE)
 _MAX_INCLUDE_DEPTH = 5
+_MAX_INCLUDE_BYTES = 64 * 1024
 
 
 def _resolve_includes(
@@ -113,11 +116,16 @@ def _resolve_includes(
     base_path: Path,
     visited: set[str] | None = None,
     depth: int = 0,
+    root: Path | None = None,
 ) -> str:
     if depth >= _MAX_INCLUDE_DEPTH:
         return content
     if visited is None:
         visited = set()
+    if root is None:
+        from .workspace import project_root
+
+        root = project_root().resolve()
 
     def _replace(m: _re.Match) -> str:
         raw = m.group(1)
@@ -128,6 +136,14 @@ def _resolve_includes(
         else:
             resolved = base_path / raw
         resolved = resolved.resolve()
+        if not resolved.is_relative_to(root):
+            return f"<!-- skipped (outside the project): {raw} -->"
+        try:
+            if resolved.stat().st_size > _MAX_INCLUDE_BYTES:
+                return f"<!-- skipped (larger than {_MAX_INCLUDE_BYTES} bytes): {raw} -->"
+        except OSError:
+            return f"<!-- not found: {raw} -->"
+
         key = str(resolved)
         if key in visited:
             return f"<!-- circular: {raw} -->"
@@ -136,7 +152,7 @@ def _resolve_includes(
         try:
             visited.add(key)
             included = resolved.read_text(encoding="utf-8")
-            return _resolve_includes(included, resolved.parent, visited, depth + 1)
+            return _resolve_includes(included, resolved.parent, visited, depth + 1, root)
         except Exception:
             return f"<!-- error reading: {raw} -->"
 
@@ -166,28 +182,61 @@ def _load_rules_dir(directory: Path) -> str:
 
 
 def load_claude_md() -> str:
-    """Walk up from cwd collecting all CLAUDE.md files, resolving @includes."""
+    """Collect CLAUDE.md files, gated by whether the project is trusted.
+
+    Instructions and rules inside the workspace come from the repository, so an
+    untrusted checkout contributes nothing but a note saying why. Files above
+    the workspace belong to the user's own machine and stay.
+    """
+
+    from .project_trust import is_project_trusted
+    from .workspace import project_root
+
+    project = project_root().resolve()
+    trusted = is_project_trusted(project)
+    notices: list[str] = []
     parts: list[str] = []
+    skipped_project_file = False
     d = Path.cwd().resolve()
     while True:
         f = d / "CLAUDE.md"
-        if f.is_file():
+        inside_project = _is_inside(f.parent, project)
+        if f.is_file() and (trusted or not inside_project):
             try:
                 content = f.read_text(encoding="utf-8")
-                content = _resolve_includes(content, d)
+                content = _resolve_includes(content, d, root=project)
                 parts.insert(0, content)
             except Exception:
                 pass
+        elif f.is_file():
+            skipped_project_file = True
         parent = d.parent
         if parent == d:
             break
         d = parent
-    # Load .mawoagent/rules/*.md from cwd
-    rules = _load_rules_dir(Path.cwd())
+
+    rules = ""
+    if trusted:
+        rules = _load_rules_dir(project)
+    elif skipped_project_file or (project / ".mawoagent" / "rules").is_dir():
+        notices.append(
+            "Project instructions and rules were not loaded: this project is not trusted. "
+            "Run /trust-project to enable them."
+        )
+
     claude_md = ""
     if parts:
         claude_md = "\n\n# Project Instructions (CLAUDE.md)\n" + "\n\n---\n\n".join(parts)
+    if notices:
+        claude_md += "\n\n# Project Configuration\n" + "\n".join(notices)
     return claude_md + rules
+
+
+def _is_inside(path: Path, root: Path) -> bool:
+    try:
+        return path.resolve().is_relative_to(root)
+    except (OSError, ValueError):
+        return False
 
 
 def get_git_context() -> str:
