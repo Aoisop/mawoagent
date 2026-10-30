@@ -84,7 +84,7 @@ class PathClassificationTests(unittest.TestCase):
         self.assertTrue(decision.resolved.is_unc)
 
     def test_protected_policy_files_are_flagged(self) -> None:
-        for name in (".mawoagent/settings.json", ".mcp.json", "./.mcp.json"):
+        for name in (".mawoagent/settings.json", ".mcp.json", "./.mcp.json", ".mawoagent/audit.jsonl"):
             with self.subTest(name=name):
                 decision = self.workspace.classify(name)
                 self.assertTrue(decision.protected, name)

@@ -51,7 +51,7 @@ class ReviewBoundaryTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_absolute_write_creates_exact_destination_and_tracks_actual_path(self):
         with tempfile.TemporaryDirectory() as tmp, working_directory(tmp), \
-                patch("agents.tools._auto_update_memory_index"):
+                patch("agents.tools._refresh_memory_index"):
             destination = Path(tmp) / "new" / "nested" / "file.txt"
             reads = {}
             result = await execute_tool("write_file", {"file_path": str(destination), "content": "correct"}, reads)
@@ -75,7 +75,7 @@ class ReviewBoundaryTests(unittest.IsolatedAsyncioTestCase):
         agent = self.agent(permission_mode="plan")
         with tempfile.TemporaryDirectory() as tmp, working_directory(tmp), \
                 patch("agents.tools._check_permission_rules", return_value=None), \
-                patch("agents.tools._auto_update_memory_index"):
+                patch("agents.tools._refresh_memory_index"):
             plan = Path(tmp) / "plans" / "new-plan.md"
             agent._plan_file_path = str(plan)
             inp = {"file_path": str(plan), "content": "Proposed change"}

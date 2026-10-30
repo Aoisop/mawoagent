@@ -14,7 +14,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Literal
 
-from agents.memory import get_memory_dir
 from agents.sandbox import get_backend
 from agents.snapshots import record_before_change
 from agents.tool_schemas import ToolDef, tool_definitions
@@ -187,7 +186,7 @@ def _write_file(inp: ToolInput, expected_version=_UNTRACKED) -> str:
     try:
         path = _resolve_tool_path(inp["file_path"]).resolve()
         version = _replace_file(path, inp["content"], expected_version)
-        _auto_update_memory_index(str(path))
+        _refresh_memory_index(str(path))
         lines = inp["content"].split("\n")
         line_count = len(lines)
         preview = "\n".join(f"{i + 1:4d} | {l}" for i, l in enumerate(lines[:30]))
@@ -196,29 +195,27 @@ def _write_file(inp: ToolInput, expected_version=_UNTRACKED) -> str:
     except Exception as e:
         return f"Error writing file: {e}"
 
-def _auto_update_memory_index(file_path:str) -> None:
+def _refresh_memory_index(file_path: str) -> None:
+    """Keep MEMORY.md current when a memory file is written directly.
+
+    The index has exactly one owner. This used to rebuild it from a second,
+    older implementation, which dropped the source/scope labels and the entry
+    cap whenever the model wrote a memory file with write_file instead of
+    memory_save.
+    """
+
     try:
-        mem_dir = str(get_memory_dir())
-        if file_path.startswith(mem_dir) and file_path.endswith(".md") and not file_path.endswith("MEMORY.md"):
-            mem_path = Path(mem_dir)
-            lines = ["# Memory Index", ""]
-            for f in sorted(mem_path.glob("*.md")):
-                if f.name == "MEMORY.md":
-                    continue
-                try:
-                    raw = f.read_text(encoding="utf-8")
-                    name_match = re.search(r"^name:\s*(.+)$", raw, re.MULTILINE)
-                    type_match = re.search(r"^type:\s*(.+)$", raw, re.MULTILINE)
-                    desc_match = re.search(r"^description:\s*(.+)$", raw, re.MULTILINE)
-                    if name_match and type_match:
-                        n = name_match.group(1).strip()
-                        t = type_match.group(1).strip()
-                        d = desc_match.group(1).strip()
-                        lines.append(f"- **[{n}]({f.name})** ({t}) — {d}")
-                except Exception:
-                    pass
-            (mem_path / "MEMORY.md").write_text("\n".join(lines), encoding="utf-8")
+        from .memory import _update_memory_index, get_memory_dir
+        from .storage import state_lock
+
+        target = Path(file_path).resolve()
+        directory = get_memory_dir().resolve()
+        if target.parent != directory or target.suffix != ".md" or target.name == "MEMORY.md":
+            return
+        with state_lock(directory / "MEMORY.md"):
+            _update_memory_index()
     except Exception:
+        # A stale index is not worth failing a successful write over.
         pass
 
 #-------------------------编辑助手，符号规范化+差异化------------------------
@@ -527,29 +524,6 @@ async def _run_shell(inp: ToolInput) -> str:
         output += ("\n" if output else "") + "Stderr:\n" + stderr
     return output or "(no output)"
 
-
-#危险命令检测模式列表
-
-DANGEROUS_PATTERNS = [
-    re.compile(r"\brm\s"),
-    re.compile(r"\bgit\s+(push|reset|clean|checkout\s+\.)"),
-    re.compile(r"\bsudo\b"),
-    re.compile(r"\bmkfs\b"),
-    re.compile(r"\bdd\s"),
-    re.compile(r">\s*/dev/"),
-    re.compile(r"\bkill\b"),
-    re.compile(r"\bpkill\b"),
-    re.compile(r"\breboot\b"),
-    re.compile(r"\bshutdown\b"),
-    re.compile(r"\bdel\s", re.IGNORECASE),
-    re.compile(r"\brmdir\s", re.IGNORECASE),
-    re.compile(r"\bformat\s", re.IGNORECASE),
-    re.compile(r"\btaskkill\s", re.IGNORECASE),
-    re.compile(r"\bRemove-Item\s", re.IGNORECASE),
-    re.compile(r"\bStop-Process\s", re.IGNORECASE),
-]
-def is_dangerous(command: str) -> bool:
-    return any(p.search(command) for p in DANGEROUS_PATTERNS)
 
 #权限规则
 def _parse_rule(rule: str) -> dict:

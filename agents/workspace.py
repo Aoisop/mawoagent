@@ -33,6 +33,8 @@ Scope = Literal["workspace", "runtime_state", "outside"]
 PROTECTED_RELATIVE_PATHS = (
     ".mawoagent/settings.json",
     ".mcp.json",
+    # The audit trail is evidence; rewriting it turns a record into a claim.
+    ".mawoagent/audit.jsonl",
     # Read into the system prompt, the Skill catalogue, or sub-agent prompts.
     ".mawoagent/rules",
     ".mawoagent/skills",

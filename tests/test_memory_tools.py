@@ -225,3 +225,19 @@ class MemoryProvenanceTests(MemoryTestCase):
                 verdict = check_permission(tool, {"name": "x", "description": "d",
                                                   "type": "user", "content": "c"}, "plan")
                 self.assertEqual(verdict["action"], "deny")
+
+    def test_write_file_into_the_memory_directory_keeps_the_index_format(self) -> None:
+        """There is one index implementation; a direct write must not replace it."""
+
+        filename = memory.save_memory("guess", "d", "project", "x", source="inference")
+        path = memory.get_memory_dir() / filename
+        text = path.read_text(encoding="utf-8").replace("x", "edited", 1)
+        path.write_text(text, encoding="utf-8")
+
+        from agents.tools import _refresh_memory_index
+
+        _refresh_memory_index(str(path))
+
+        index = memory.load_memory_index()
+        self.assertIn("project/inference", index)
+        self.assertIn(", project)", index)

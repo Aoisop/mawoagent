@@ -28,10 +28,14 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Callable
 
+from .policy import redact_secrets
+from .storage import state_lock
+
 REDACTED = "[redacted]"
 SECRET_KEYS = ("token", "secret", "password", "passwd", "api_key", "apikey", "authorization", "cookie")
 MAX_ARGUMENT_CHARS = 240
 MAX_LOG_BYTES = 5 * 1024 * 1024
+ROTATED_GENERATIONS = 3
 
 
 @dataclass(frozen=True)
@@ -65,6 +69,10 @@ def _redact(value: Any) -> Any:
         return result
     if isinstance(value, (list, tuple)):
         return [_redact(item) for item in value]
+    if isinstance(value, str):
+        # Key names miss the common case: a token inside a shell command or a
+        # URL is still a token. policy.redact_secrets matches it by shape.
+        return redact_secrets(value)
     return value
 
 
@@ -119,10 +127,13 @@ class AuditLog:
     def _append(self, event: AuditEvent) -> None:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            self._rotate_if_needed()
             line = json.dumps(asdict(event), ensure_ascii=False) + "\n"
-            with self.path.open("a", encoding="utf-8") as stream:
-                stream.write(line)
+            # The log is a record of what happened; two processes appending at
+            # once must not interleave half a line.
+            with state_lock(self.path):
+                self._rotate_if_needed()
+                with self.path.open("a", encoding="utf-8") as stream:
+                    stream.write(line)
         except OSError:
             # An audit log that cannot be written must not fail the call it
             # was describing.
@@ -132,8 +143,14 @@ class AuditLog:
         try:
             if self.path.stat().st_size < MAX_LOG_BYTES:
                 return
-            rotated = self.path.with_suffix(self.path.suffix + ".1")
-            os.replace(self.path, rotated)
+            # Keep a few generations: dropping the only previous file made the
+            # history unreachable exactly when it was most interesting.
+            for index in range(ROTATED_GENERATIONS - 1, 0, -1):
+                older = self.path.with_name(f"{self.path.name}.{index}")
+                newer = self.path.with_name(f"{self.path.name}.{index + 1}")
+                if older.exists():
+                    os.replace(older, newer)
+            os.replace(self.path, self.path.with_name(f"{self.path.name}.1"))
         except OSError:
             pass
 
@@ -184,20 +201,22 @@ class CallRecord:
 
 
 def read_events(root: Path | str, limit: int = 50) -> list[dict]:
-    """The newest events first; used by the web endpoint and for debugging."""
+    """The newest events first, walking back through rotated generations."""
 
     path = audit_path(root)
-    try:
-        with path.open("r", encoding="utf-8") as stream:
-            lines = stream.readlines()[-max(limit * 2, 200):]
-    except OSError:
-        return []
     events: list[dict] = []
-    for line in reversed(lines):
+    candidates = [path] + [path.with_name(f"{path.name}.{index}") for index in range(1, ROTATED_GENERATIONS + 1)]
+    for candidate in candidates:
         try:
-            events.append(json.loads(line))
-        except json.JSONDecodeError:
+            with candidate.open("r", encoding="utf-8") as stream:
+                lines = stream.readlines()[-max(limit * 2, 200):]
+        except OSError:
             continue
-        if len(events) >= limit:
-            break
+        for line in reversed(lines):
+            try:
+                events.append(json.loads(line))
+            except json.JSONDecodeError:
+                continue
+            if len(events) >= limit:
+                return events
     return events

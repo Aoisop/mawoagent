@@ -29,6 +29,12 @@ def _drain(coro):
 
 
 class SummaryTests(unittest.TestCase):
+    def test_a_token_inside_a_command_string_is_redacted(self) -> None:
+        # Key-name matching misses this: the secret is inside a value.
+        text = summarize_arguments({"command": "curl -H 'Authorization: Bearer sk-live-ABCDEF1234567890'"})
+        self.assertNotIn("sk-live-ABCDEF1234567890", text)
+        self.assertIn(REDACTED, text)
+
     def test_secrets_are_redacted_wherever_they_appear(self) -> None:
         text = summarize_arguments({"token": "abc123", "nested": {"api_key": "k"}})
         self.assertIn(REDACTED, text)
@@ -126,6 +132,42 @@ class LogTests(unittest.TestCase):
                 record.finish()
 
         self.assertTrue(audit_path(self.root).with_suffix(".jsonl.1").exists())
+
+    def test_rotation_keeps_older_generations_readable(self) -> None:
+        with mock.patch.object(audit_module, "MAX_LOG_BYTES", 900):
+            log = AuditLog(audit_path(self.root))
+            for number in range(60):
+                record = CallRecord(log, session_id="s1", tool=f"t{number}", arguments={})
+                record.start()
+                record.finish()
+
+        self.assertTrue(audit_path(self.root).with_name("audit.jsonl.1").exists())
+        # More is readable than the current file alone holds: the rotated
+        # generations are part of the trail, not discarded history.
+        current = len(audit_path(self.root).read_text(encoding="utf-8").splitlines())
+        events = read_events(self.root, limit=200)
+        self.assertGreater(len(events), current)
+
+    def test_concurrent_appends_do_not_interleave(self) -> None:
+        import threading
+
+        log = AuditLog(audit_path(self.root))
+
+        def writer(prefix: str) -> None:
+            for number in range(40):
+                record = CallRecord(log, session_id="s1", tool=f"{prefix}{number}", arguments={})
+                record.start()
+                record.finish()
+
+        threads = [threading.Thread(target=writer, args=(name,)) for name in ("a", "b")]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        for line in audit_path(self.root).read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                json.loads(line)  # every line is a complete record
 
     def test_read_events_returns_newest_first(self) -> None:
         log = AuditLog(audit_path(self.root))
