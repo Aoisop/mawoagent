@@ -227,12 +227,57 @@ class OsEntryTests(unittest.TestCase):
             name="nightly", prompt="p", workspace=Path(self.tmp.name), cron="30 2 * * *",
         )
 
-    def test_windows_renders_a_scheduled_task_command(self) -> None:
+    def test_windows_renders_a_launcher_and_a_task_registration(self) -> None:
         entry = schedule.render_os_entry(self.spec, platform="windows")
-        self.assertEqual(entry["kind"], "command")
-        self.assertIn("schtasks", entry["content"])
-        self.assertIn("/ST 02:30", entry["content"])
+        self.assertEqual(entry["kind"], "task")
+        self.assertTrue(entry["path"].endswith("nightly.cmd"))
+        # The task references the launcher by argument, so no user text is ever
+        # re-parsed by cmd.exe.
+        self.assertIn("/ST", entry["argv"])
+        self.assertIn("02:30", entry["argv"])
+        self.assertEqual(entry["argv"][-3:], ["/TR", entry["path"], "/F"])
+        self.assertIn("cd /d", entry["content"])
         self.assertIn("agents.schedule run nightly", entry["content"])
+
+    def test_a_workspace_with_a_shell_metacharacter_is_not_reparsed(self) -> None:
+        tricky = Path(self.tmp.name) / "work & calc"
+        tricky.mkdir()
+        spec = ScheduleSpec(name="nightly", prompt="p", workspace=tricky, cron="30 2 * * *")
+
+        windows = schedule.render_os_entry(spec, platform="windows")
+        self.assertNotIn("& calc", windows["argv"][-3])
+        self.assertIn('cd /d "', windows["content"])
+
+        linux = schedule.render_os_entry(spec, platform="linux")
+        # shlex.quote wraps the path, so the ampersand stays inside one argument.
+        self.assertIn("'", linux["content"])
+        self.assertIn("work & calc", linux["content"])
+
+    def test_an_invalid_permission_mode_cannot_be_stored_or_loaded(self) -> None:
+        bad = ScheduleSpec(name="nightly", prompt="p", workspace=Path(self.tmp.name),
+                           cron="30 2 * * *", permission_mode="bypassPermissions")
+        with self.assertRaises(ScheduleError):
+            schedule.save_spec(bad)
+
+        # A file written by hand is validated on load too.
+        root = schedule.schedules_root()
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "handwritten.json").write_text(
+            json.dumps({
+                "name": "handwritten", "prompt": "p", "workspace": str(self.tmp.name),
+                "cron": "0 3 * * *", "permission_mode": "bypassPermissions",
+            }),
+            encoding="utf-8",
+        )
+        with self.assertRaises(ScheduleError):
+            schedule.load_spec("handwritten")
+        self.assertEqual(schedule.list_specs(), [])
+
+    def test_a_missing_workspace_is_rejected(self) -> None:
+        missing = ScheduleSpec(name="nightly", prompt="p", workspace=Path(self.tmp.name) / "gone",
+                               cron="30 2 * * *")
+        with self.assertRaises(ScheduleError):
+            schedule.save_spec(missing)
 
     def test_macos_renders_a_launchd_plist(self) -> None:
         entry = schedule.render_os_entry(self.spec, platform="darwin")

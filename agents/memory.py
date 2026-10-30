@@ -41,6 +41,19 @@ ARCHIVE_DIRNAME = "archive"
 _logger = logging.getLogger(__name__)
 
 
+def _one_line(value: str) -> str:
+    """Collapse a value that is rendered into a single-line format.
+
+    Memory text is written by the model. A newline in a name or description
+    turns one index row into two, and the second row can look like a heading the
+    runtime wrote itself.
+    """
+
+    text = str(value or "").replace("\r\n", "\n").replace("\r", "\n")
+    text = " ".join(part.strip() for part in text.split("\n") if part.strip())
+    return "".join(character for character in text if character.isprintable() or character == " ").strip()
+
+
 class MemoryEntry:
     """完整 memory 条目，用于 /memory 列表和 CRUD 操作。"""
 
@@ -163,7 +176,8 @@ def save_memory(name: str, description: str, type: str, content: str,
     d = get_memory_dir()
     filename = f"{type}_{_slugify(name)}.md"
     text = format_frontmatter(
-        {"name": name, "description": description, "type": type, "source": source, "scope": scope},
+        {"name": _one_line(name), "description": _one_line(description), "type": type,
+         "source": source, "scope": scope},
         content,
     )
     with state_lock(d / "MEMORY.md"):
@@ -247,7 +261,7 @@ def _update_memory_index() -> None:
     for m in memories[:MAX_INDEX_ENTRIES]:
         # Source and scope stay visible in the index: "the user said this" and
         # "the model inferred this" must not look identical at recall time.
-        lines.append(f"- **[{m.name}]({m.filename})** ({m.type}/{m.source}, {m.scope}) — {m.description}")
+        lines.append(f"- **[{_one_line(m.name)}]({m.filename})** ({m.type}/{m.source}, {m.scope}) — {_one_line(m.description)}")
     if len(memories) > MAX_INDEX_ENTRIES:
         lines.append(f"- ... {len(memories) - MAX_INDEX_ENTRIES} more not listed; search with memory_search")
     atomic_write_text(_get_index_path(), "\n".join(lines))
@@ -272,15 +286,17 @@ def load_memory_index() -> str:
 class MemoryHeader:
     """轻量 memory 摘要，只包含召回筛选需要的元信息。"""
 
-    __slots__ = ("filename", "file_path", "mtime_ms", "description", "type")
+    __slots__ = ("filename", "file_path", "mtime_ms", "description", "type", "source")
 
     def __init__(self, filename: str, file_path: str, mtime_ms: float,
-                 description: str | None, type: str | None):
+                 description: str | None, type: str | None, source: str = "user"):
         self.filename = filename
         self.file_path = file_path
         self.mtime_ms = mtime_ms
         self.description = description
         self.type = type
+        # Carried through recall so the injected text says where it came from.
+        self.source = source
 
 
 MAX_MEMORY_FILES = 200                    # 参与召回筛选的最多 memory 文件数。
@@ -335,12 +351,14 @@ def scan_memory_headers() -> list[MemoryHeader]:
             result = parse_frontmatter(_read_memory_header(f))
             meta = result.meta
             t = as_text(meta.get("type"))
+            source = as_text(meta.get("source"))
             headers.append(MemoryHeader(
                 filename=f.name,
                 file_path=str(f),
                 mtime_ms=mtime * 1000,
                 description=as_text(meta.get("description")) or None,
                 type=t if t in VALID_TYPES else None,
+                source=source if source in VALID_SOURCES else "user",
             ))
         except (OSError, UnicodeError):
             _logger.warning("Skipping unreadable memory header %s", f, exc_info=True)
@@ -357,7 +375,7 @@ def format_memory_manifest(headers: list[MemoryHeader]) -> str:
         tag = f"[{h.type}] " if h.type else ""
         ts = datetime.fromtimestamp(h.mtime_ms / 1000, tz=timezone.utc).isoformat()
         if h.description:
-            lines.append(f"- {tag}{h.filename} ({ts}): {h.description}")
+            lines.append(f"- {tag}{h.filename} ({ts}): {_one_line(h.description)}")
         else:
             lines.append(f"- {tag}{h.filename} ({ts})")
     return "\n".join(lines)
@@ -396,13 +414,14 @@ Return a JSON object with a "selected_memories" array of filenames for the memor
 class RelevantMemory:
     """被召回并准备注入对话的完整 memory。"""
 
-    __slots__ = ("path", "content", "mtime_ms", "header")
+    __slots__ = ("path", "content", "mtime_ms", "header", "source")
 
-    def __init__(self, path: str, content: str, mtime_ms: float, header: str):
+    def __init__(self, path: str, content: str, mtime_ms: float, header: str, source: str = "user"):
         self.path = path
         self.content = content
         self.mtime_ms = mtime_ms
         self.header = header
+        self.source = source
 
     @property
     def size(self) -> int:
@@ -469,14 +488,15 @@ async def select_relevant_memories(
 
             # 根据 memory 修改时间生成提示头；旧记忆会附带 freshness warning。
             freshness = memory_freshness_warning(h.mtime_ms)
+            origin = f"source: {h.source}"
             header_text = (
-                f"{freshness}\n\nMemory: {h.file_path}:" if freshness
-                else f"Memory (saved {memory_age(h.mtime_ms)}): {h.file_path}:"
+                f"{freshness}\n\nMemory ({origin}): {h.file_path}:" if freshness
+                else f"Memory (saved {memory_age(h.mtime_ms)}, {origin}): {h.file_path}:"
             )
             # 返回 RelevantMemory 列表，后续会被格式化成 <system-reminder>。
             result.append(RelevantMemory(
                 path=h.file_path, content=content,
-                mtime_ms=h.mtime_ms, header=header_text,
+                mtime_ms=h.mtime_ms, header=header_text, source=h.source,
             ))
         return result
     except Exception as e:

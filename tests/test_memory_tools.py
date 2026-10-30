@@ -189,3 +189,39 @@ class ToolSurfaceTests(MemoryTestCase):
 
     def test_search_without_hits_says_so(self) -> None:
         self.assertEqual(self.call("memory_search", {"query": "nothing-here"}), "No matching memories.")
+
+
+class MemoryProvenanceTests(MemoryTestCase):
+    """Recall must say where a memory came from, and text must stay on one line."""
+
+    def test_recall_carries_the_source_into_the_injected_header(self) -> None:
+        filename = memory.save_memory("guess", "d", "project", "the build uses make",
+                                      source="inference")
+
+        async def side_query(_prompt: str, _text: str) -> str:
+            return '{"selected_memories": ["%s"]}' % filename
+
+        recalled = asyncio.run(memory.select_relevant_memories("how do builds work", side_query, set()))
+        self.assertEqual(len(recalled), 1)
+        self.assertEqual(recalled[0].source, "inference")
+        self.assertIn("source: inference", recalled[0].header)
+
+    def test_a_newline_in_the_description_cannot_forge_an_index_row(self) -> None:
+        memory.save_memory("real", "line one\n# INJECTED", "project", "x", source="user")
+        index = memory.load_memory_index()
+        self.assertNotIn("\n# INJECTED", index)
+        self.assertIn("line one # INJECTED", index)
+
+    def test_a_newline_in_the_description_cannot_forge_a_manifest_entry(self) -> None:
+        memory.save_memory("real", "line one\n# INJECTED", "project", "x", source="user")
+        manifest = memory.format_memory_manifest(memory.scan_memory_headers())
+        self.assertNotIn("\n# INJECTED", manifest)
+
+    def test_plan_mode_does_not_write_memory(self) -> None:
+        from agents.tools import check_permission
+
+        for tool in ("memory_save", "memory_archive", "memory_restore"):
+            with self.subTest(tool=tool):
+                verdict = check_permission(tool, {"name": "x", "description": "d",
+                                                  "type": "user", "content": "c"}, "plan")
+                self.assertEqual(verdict["action"], "deny")

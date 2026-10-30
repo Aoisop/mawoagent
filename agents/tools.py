@@ -25,7 +25,10 @@ SyncToolHandler = Callable[[ToolInput], str]
 PermissionMode = Literal["default", "plan", "acceptEdits", "bypassPermissions", "dontAsk"]
 
 READ_TOOLS = {"read_file", "list_files", "grep_search", "compact_context"}
-EDIT_TOOLS = {"write_file", "edit_file", "skill_evolve", "skill_create", "skill_prune", "skill_restore", "state_cleanup"}
+# Writes that persist beyond the current answer. Memory belongs here: it lands in
+# the prompt of every later session, which makes it a write, not a note.
+EDIT_TOOLS = {"write_file", "edit_file", "skill_evolve", "skill_create", "skill_prune",
+              "skill_restore", "state_cleanup", "memory_save", "memory_archive", "memory_restore"}
 
 
 #并发安全的工具可以并行运行（只读，无副作用）

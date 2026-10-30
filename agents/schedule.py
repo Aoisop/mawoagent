@@ -21,6 +21,8 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import shlex
+import subprocess
 import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -31,6 +33,8 @@ from .storage import append_jsonl, try_state_lock, write_json
 
 OVERLAP_POLICIES = ("skip", "queue")
 RETRY_POLICIES = ("never", "startup_only")
+# bypassPermissions is deliberately absent: a schedule runs without a human.
+PERMISSION_MODES = ("default", "plan", "acceptEdits", "dontAsk")
 CRON_RANGES = ((0, 59), (0, 23), (1, 31), (1, 12), (0, 7))
 
 
@@ -108,6 +112,15 @@ class ScheduleSpec:
             raise ScheduleError(f"unknown overlap policy: {self.overlap}")
         if self.retry not in RETRY_POLICIES:
             raise ScheduleError(f"unknown retry policy: {self.retry}")
+        if self.permission_mode not in PERMISSION_MODES:
+            # A stored spec runs unattended; allowing bypassPermissions here
+            # would let a file on disk opt the agent out of every confirmation.
+            raise ScheduleError(
+                f"permission_mode must be one of {', '.join(PERMISSION_MODES)}; "
+                f"got {self.permission_mode!r}"
+            )
+        if not self.workspace.is_dir():
+            raise ScheduleError(f"workspace does not exist: {self.workspace}")
         if self.max_turns is not None and self.max_turns < 1:
             raise ScheduleError("max_turns must be positive")
         if self.max_cost is not None and self.max_cost <= 0:
@@ -140,7 +153,10 @@ def load_spec(name: str) -> ScheduleSpec:
     path = schedules_root() / f"{_safe_name(name)}.json"
     if not path.exists():
         raise ScheduleError(f"unknown schedule: {name}")
-    return ScheduleSpec.from_dict(json.loads(path.read_text(encoding="utf-8")))
+    spec = ScheduleSpec.from_dict(json.loads(path.read_text(encoding="utf-8")))
+    # A file on disk has no more authority than one typed at the prompt.
+    spec.validate()
+    return spec
 
 
 def list_specs() -> list[ScheduleSpec]:
@@ -150,7 +166,9 @@ def list_specs() -> list[ScheduleSpec]:
     specs = []
     for path in sorted(root.glob("*.json")):
         try:
-            specs.append(ScheduleSpec.from_dict(json.loads(path.read_text(encoding="utf-8"))))
+            spec = ScheduleSpec.from_dict(json.loads(path.read_text(encoding="utf-8")))
+            spec.validate()
+            specs.append(spec)
         except (OSError, ValueError, KeyError, TypeError):
             continue
     return specs
@@ -302,33 +320,66 @@ def _fixed_time(cron: str) -> tuple[int, int]:
     return int(minute), int(hour)
 
 
-def _command(spec: ScheduleSpec) -> str:
+def _argv(spec: ScheduleSpec) -> list[str]:
+    """The command as arguments, never as a string to be re-parsed."""
+
+    return [sys.executable or "python", "-m", "agents.schedule", "run", spec.name]
+
+
+def _posix_command(spec: ScheduleSpec) -> str:
+    log = shlex.quote(str(schedules_root() / f"{spec.name}.log"))
+    return f"cd {shlex.quote(str(spec.workspace))} && {shlex.join(_argv(spec))} >> {log} 2>&1"
+
+
+def _windows_launcher(spec: ScheduleSpec) -> str:
+    """A .cmd file keeps the quoting out of schtasks.
+
+    /TR takes a single string that cmd.exe re-parses, so a workspace path with a
+    quote or an ampersand changes the meaning of the command. A launcher file is
+    written once, quoted once, and referenced by an argument list.
+    """
+
+    log = schedules_root() / f"{spec.name}.log"
     python = sys.executable or "python"
-    return f'cd "{spec.workspace}" && "{python}" -m agents.schedule run {spec.name}'
+    return (
+        "@echo off\r\n"
+        f'cd /d "{spec.workspace}"\r\n'
+        f'"{python}" -m agents.schedule run {spec.name} >> "{log}" 2>&1\r\n'
+    )
 
 
-def render_os_entry(spec: ScheduleSpec, platform: str | None = None) -> dict[str, str]:
-    """Return the file (or command) that would install this schedule."""
+def render_os_entry(spec: ScheduleSpec, platform: str | None = None) -> dict[str, Any]:
+    """Return the file, line or command that would install this schedule."""
 
     platform = platform or ("windows" if os.name == "nt" else sys.platform)
     root = schedules_root()
     if platform == "windows":
         minute, hour = _fixed_time(spec.cron)
         task = f"mawoagent-{spec.name}"
-        command = (
-            f'schtasks /Create /TN {task} /SC DAILY /ST {hour:02d}:{minute:02d} '
-            f'/TR "{_command(spec)}" /F'
-        )
-        return {"platform": "windows", "kind": "command", "path": task, "content": command}
+        launcher = root / f"{spec.name}.cmd"
+        argv = [
+            "schtasks", "/Create", "/TN", task, "/SC", "DAILY",
+            "/ST", f"{hour:02d}:{minute:02d}", "/TR", str(launcher), "/F",
+        ]
+        return {
+            "platform": "windows", "kind": "task", "path": str(launcher),
+            "content": _windows_launcher(spec), "argv": argv,
+            "command": subprocess.list2cmdline(argv),
+        }
     if platform == "darwin":
+        from xml.sax.saxutils import escape as _xml_escape
+
         minute, hour = _fixed_time(spec.cron)
         label = f"dev.mawoagent.{spec.name}"
+        # The path is shell-quoted by _posix_command and XML-escaped here: both
+        # layers have their own metacharacters.
+        command = _xml_escape(_posix_command(spec))
         plist = f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>{label}</string>
   <key>ProgramArguments</key><array>
-    <string>/bin/sh</string><string>-lc</string><string>{_command(spec)}</string>
+    <string>/bin/sh</string><string>-c</string><string>{command}</string>
   </array>
   <key>StartCalendarInterval</key><dict>
     <key>Hour</key><integer>{hour}</integer>
@@ -340,11 +391,11 @@ def render_os_entry(spec: ScheduleSpec, platform: str | None = None) -> dict[str
 """
         return {"platform": "darwin", "kind": "file",
                 "path": str(Path.home() / "Library" / "LaunchAgents" / f"{label}.plist"), "content": plist}
-    line = f"{spec.cron} {_command(spec)} >> {root / (spec.name + '.log')} 2>&1 # mawoagent:{spec.name}"
+    line = f"{spec.cron} {_posix_command(spec)} # mawoagent:{spec.name}"
     return {"platform": "linux", "kind": "crontab", "path": "crontab", "content": line}
 
 
-def install(name: str, *, apply: bool = False, executor: Callable[[str], int] | None = None) -> dict[str, Any]:
+def install(name: str, *, apply: bool = False, executor: Callable[[list[str]], int] | None = None) -> dict[str, Any]:
     """Render the platform entry; only touch the system when *apply* is set."""
 
     spec = load_spec(name)
@@ -352,20 +403,21 @@ def install(name: str, *, apply: bool = False, executor: Callable[[str], int] | 
     if not apply:
         return {**entry, "applied": False}
 
-    executor = executor or (lambda command: os.system(command))
-    if entry["kind"] == "file":
-        path = Path(entry["path"])
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(entry["content"], encoding="utf-8")
-        return {**entry, "applied": True}
-    code = executor(entry["content"])
     if entry["kind"] == "crontab":
-        # Printing is the honest default here: editing a user's crontab from a
-        # library is destructive and hard to undo.
+        # Editing a user's crontab is destructive and hard to undo; print instead.
         raise ScheduleError(
             "crontab installation requires a manual step: append this line with `crontab -e`:\n"
             + entry["content"]
         )
+
+    path = Path(entry["path"])
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(entry["content"], encoding="utf-8")
+    if entry["kind"] == "file":
+        return {**entry, "applied": True}
+
+    runner = executor or (lambda argv: subprocess.run(argv, check=False).returncode)
+    code = runner(entry["argv"])
     return {**entry, "applied": code == 0, "exit_code": code}
 
 
