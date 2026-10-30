@@ -125,7 +125,10 @@ def _resolve_includes(
     if root is None:
         from .workspace import project_root
 
-        root = project_root().resolve()
+        root = project_root()
+    # Compare real, normalised paths: a short 8.3 name on Windows or /var on
+    # macOS is the same directory under a different spelling.
+    root = Path(os.path.realpath(str(root)))
 
     def _replace(m: _re.Match) -> str:
         raw = m.group(1)
@@ -135,8 +138,8 @@ def _resolve_includes(
             resolved = Path(raw)
         else:
             resolved = base_path / raw
-        resolved = resolved.resolve()
-        if not resolved.is_relative_to(root):
+        resolved = Path(os.path.realpath(str(resolved)))
+        if not _contained(resolved, root):
             return f"<!-- skipped (outside the project): {raw} -->"
         try:
             if resolved.stat().st_size > _MAX_INCLUDE_BYTES:
@@ -232,9 +235,18 @@ def load_claude_md() -> str:
     return claude_md + rules
 
 
+def _contained(path: Path, root: Path) -> bool:
+    """Containment on real paths, safe across drives and UNC shares."""
+
+    try:
+        return os.path.commonpath([str(path), str(root)]) == str(root)
+    except ValueError:
+        return False
+
+
 def _is_inside(path: Path, root: Path) -> bool:
     try:
-        return path.resolve().is_relative_to(root)
+        return _contained(Path(os.path.realpath(str(path))), Path(os.path.realpath(str(root))))
     except (OSError, ValueError):
         return False
 
