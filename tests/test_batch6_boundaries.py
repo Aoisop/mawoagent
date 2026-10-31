@@ -42,14 +42,19 @@ class DiscoveryScopeTests(unittest.TestCase):
         (self.outside / "key.txt").write_text("sk-live", encoding="utf-8")
         (self.root / "notes.txt").write_text("inside", encoding="utf-8")
 
+    def listing(self, path: str, pattern: str) -> str:
+        # Through execute_tool: the filter is built there, and calling the
+        # handler directly would test a path no production call takes.
+        return asyncio.run(tools.execute_tool("list_files", {"path": path, "pattern": pattern}))
+
     def test_a_parent_glob_is_refused(self) -> None:
         with workspace_scope(WorkspaceContext(root=self.root, workspace_only_reads=True)):
-            output = tools._list_files({"path": ".", "pattern": "../secrets/*"})
+            output = self.listing(".", "../secrets/*")
         self.assertIn("must stay inside", output)
 
     def test_discovery_does_not_leave_a_confined_workspace(self) -> None:
         with workspace_scope(WorkspaceContext(root=self.root, workspace_only_reads=True)):
-            found = tools._list_files({"path": ".", "pattern": "**/*.txt"})
+            found = self.listing(".", "**/*.txt")
         self.assertIn("notes.txt", found)
         self.assertNotIn("key.txt", found)
 
@@ -61,7 +66,7 @@ class DiscoveryScopeTests(unittest.TestCase):
             self.skipTest("symlinks are not available here")
 
         with workspace_scope(WorkspaceContext(root=self.root, workspace_only_reads=True)):
-            found = tools._list_files({"path": "alias", "pattern": "*.txt"})
+            found = self.listing("alias", "*.txt")
         self.assertNotIn("key.txt", found)
 
 
