@@ -186,7 +186,8 @@ class RuntimeBoundaryTests(unittest.IsolatedAsyncioTestCase):
                     yield NS(usage=None, choices=[NS(delta=NS(content=text, tool_calls=None), finish_reason=None if self.fail else "stop")])
                 else:
                     yield NS(type="content_block_delta", delta=NS(text=text))
-                if self.fail: raise RuntimeError("ECONNRESET")
+                if self.fail:
+                    raise RuntimeError("ECONNRESET")
         for protocol in ("openai", "anthropic"):
             agent = self.agent(api_protocol=protocol)
             agent._turn_output_buffer = ["earlier answer\n"]

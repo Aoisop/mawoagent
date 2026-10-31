@@ -676,7 +676,7 @@ Examples:
         try:
             asyncio.run(run_one_shot(agent, prompt))
         except BaseException as exc:  # noqa: BLE001 - the exit code carries the kind
-            from .output import EXIT_CANCELLED, classify_error
+            from .output import classify_error
 
             usage = _usage(agent)
             if output_format != "text":

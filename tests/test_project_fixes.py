@@ -337,12 +337,16 @@ se.get_evolution_dir = lambda: Path(sys.argv[1])
 for _ in range(15):
     se.record_skill_usage_judgments([{"name":"demo", "relevant":True, "used":True}])
 '''
-        with tempfile.TemporaryDirectory() as tmp:
+        # Windows can still hold the lock file briefly after the child exits;
+        # a cleanup failure must not be reported as a lost-count failure.
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
             processes = [subprocess.Popen([sys.executable, '-c', script, tmp], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                          for _ in range(4)]
             for process in processes:
                 stdout, stderr = process.communicate(timeout=10)
-                self.assertEqual(process.returncode, 0, stderr.decode())
+                # A child's traceback is not guaranteed to be UTF-8: on Windows
+                # the interpreter writes localised text in the console code page.
+                self.assertEqual(process.returncode, 0, stderr.decode(errors="replace"))
             stats = json.loads((Path(tmp) / 'skill_usage_stats.json').read_text())
             self.assertEqual(stats['demo']['retrieved'], 60)
             self.assertEqual(stats['demo']['used'], 60)

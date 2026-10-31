@@ -189,7 +189,7 @@ def _write_file(inp: ToolInput, expected_version=_UNTRACKED) -> str:
         _refresh_memory_index(str(path))
         lines = inp["content"].split("\n")
         line_count = len(lines)
-        preview = "\n".join(f"{i + 1:4d} | {l}" for i, l in enumerate(lines[:30]))
+        preview = "\n".join(f"{number + 1:4d} | {text}" for number, text in enumerate(lines[:30]))
         trunc = f"\n  ... ({line_count} lines total)" if line_count > 30 else ""
         return _FileResult(f"Successfully wrote to {inp['file_path']} ({line_count} lines)\n\n{preview}{trunc}", path, version)
     except Exception as e:
@@ -245,10 +245,10 @@ def _generate_diff(old_content: str, old_string: str, new_string: str) -> str:
     new_lines = new_string.split("\n")
 
     parts = [f"@@ -{line_num},{len(old_lines)} +{line_num},{len(new_lines)} @@"]
-    for l in old_lines:
-        parts.append(f"- {l}")
-    for l in new_lines:
-        parts.append(f"+ {l}")
+    for text in old_lines:
+        parts.append(f"- {text}")
+    for text in new_lines:
+        parts.append(f"+ {text}")
     return "\n".join(parts)
 
 #编辑文件

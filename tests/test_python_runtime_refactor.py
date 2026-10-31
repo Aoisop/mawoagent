@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import asyncio
 from contextlib import redirect_stdout
 from copy import deepcopy
 import io
 import unittest
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import patch
 
 from agents.agent import Agent
 from agents.tool_results import compact_tool_results, SNIP_PLACEHOLDER, OLD_RESULT_PLACEHOLDER

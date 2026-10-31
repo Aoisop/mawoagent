@@ -155,7 +155,7 @@ class IncrementalTests(IndexTestCase):
 
     def test_index_is_written_and_reloaded(self) -> None:
         self.write("a.py", "def one():\n    pass\n")
-        index = refresh_index(self.root)
+        refresh_index(self.root)
         self.assertTrue(index_path(self.root).exists())
 
         loaded = load_index(self.root)
@@ -164,7 +164,7 @@ class IncrementalTests(IndexTestCase):
 
     def test_index_with_a_foreign_version_is_ignored(self) -> None:
         self.write("a.py", "def one():\n    pass\n")
-        index = refresh_index(self.root)
+        refresh_index(self.root)
         data = json.loads(index_path(self.root).read_text(encoding="utf-8"))
         data["version"] = 999
         index_path(self.root).write_text(json.dumps(data), encoding="utf-8")

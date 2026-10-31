@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import platform
+import re as _re
 import subprocess
 import sys
 from pathlib import Path
@@ -98,8 +99,6 @@ Shell: {{shell}}
 {{agents}}
 {{deferred_tools}}"""
 
-
-import re as _re
 
 # ─── @include resolution ─────────────────────────────────────
 # Resolves @./path references inside the project. Absolute and home-relative

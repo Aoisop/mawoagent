@@ -82,9 +82,9 @@ def validate_cron(expression: str) -> str:
     fields = expression.split()
     if len(fields) != 5:
         raise ScheduleError("cron must have five fields: minute hour day month weekday")
-    for field, (low, high) in zip(fields, CRON_RANGES):
-        if not _valid_cron_field(field, low, high):
-            raise ScheduleError(f"invalid cron field: {field!r}")
+    for part, (low, high) in zip(fields, CRON_RANGES):
+        if not _valid_cron_field(part, low, high):
+            raise ScheduleError(f"invalid cron field: {part!r}")
     return " ".join(fields)
 
 

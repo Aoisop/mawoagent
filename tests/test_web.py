@@ -312,29 +312,39 @@ class WebTests(unittest.TestCase):
         client = http.client.HTTPConnection("127.0.0.1",server.server_port,timeout=3)
         self.addCleanup(client.close)
         client.request("GET","/")
-        response = client.getresponse();cookie = response.getheader("Set-Cookie").split(";")[0]
+        response = client.getresponse()
+        cookie = response.getheader("Set-Cookie").split(";")[0]
         self.assertIn(b'mawoagent',response.read())
         self.assertIn("HttpOnly",response.getheader("Set-Cookie"))
         self.assertIn("frame-ancestors 'none'",response.getheader("Content-Security-Policy"))
         client.request("GET","/api/config")
-        response = client.getresponse();self.assertEqual(response.status,403);response.read()
+        response = client.getresponse()
+        self.assertEqual(response.status,403)
+        response.read()
         client.request("GET","/api/config",headers={"Cookie":cookie})
-        response = client.getresponse();config = json.loads(response.read())
+        response = client.getresponse()
+        config = json.loads(response.read())
         self.assertNotIn("fake-secret",json.dumps(config))
         for extra in ({},{"Origin":"http://evil.example"},{"Host":"evil.example"},{"Sec-Fetch-Site":"cross-site"}):
             headers = {"Cookie":cookie,"Content-Type":"application/json"}
-            if extra:headers["X-Mawoagent-CSRF"] = config["csrf"]
+            if extra:
+                headers["X-Mawoagent-CSRF"] = config["csrf"]
             headers.update(extra)
             conn = http.client.HTTPConnection("127.0.0.1",server.server_port,timeout=3)
             try:
                 conn.request("POST","/api/sessions",body="{}",headers=headers)
-                response = conn.getresponse();self.assertEqual(response.status,403);response.read()
+                response = conn.getresponse()
+                self.assertEqual(response.status,403)
+                response.read()
             finally:
                 conn.close()
         client.request("POST","/api/sessions",body="{}",headers={"Cookie":cookie,"Content-Type":"application/json","X-Mawoagent-CSRF":config["csrf"]})
-        response = client.getresponse();self.assertEqual(response.status,200);sid=json.loads(response.read())["id"]
+        response = client.getresponse()
+        self.assertEqual(response.status,200)
+        sid = json.loads(response.read())["id"]
         client.request("GET","/api/events?session="+sid,headers={"Cookie":cookie})
-        response=client.getresponse();self.assertEqual(response.status,200)
+        response = client.getresponse()
+        self.assertEqual(response.status,200)
         self.assertEqual(response.getheader("Content-Type"),"text/event-stream; charset=utf-8")
         self.assertEqual(response.readline(),b'event: state\n')
         self.assertIn(sid.encode(),response.readline())

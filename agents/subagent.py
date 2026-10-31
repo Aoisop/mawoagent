@@ -7,7 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from .frontmatter import parse_frontmatter
-from .tools import tool_definitions, ToolDef
+from .tools import tool_definitions
 
 # ─── Read-only tools (for explore and plan agents) ──────────
 

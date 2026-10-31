@@ -23,7 +23,6 @@ import argparse
 import asyncio
 import json
 import os
-import shutil
 import sys
 import tempfile
 import time
@@ -36,7 +35,6 @@ from tests.fixture_harness import (
     apply_solution,
     build_run_record,
     copy_workspace,
-    load_manifest,
     load_task,
     run_check,
     validate_run_record,

@@ -43,13 +43,9 @@ from .mcp_http import (
     MCP_PROTOCOL_VERSION,
     SUPPORTED_PROTOCOL_VERSIONS,
     HttpTransport,
-    McpAuthRequired,
-    McpHttpError,
     resolve_token,
 )
 from .tool_content import capability_report, from_mcp_content
-
-_logger = logging.getLogger(__name__)
 from .ui import print_error, print_info
 
 MCP_TOOL_TIMEOUT_SECONDS = 60.0
