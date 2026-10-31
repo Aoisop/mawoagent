@@ -157,6 +157,8 @@ python -m agents.web --port 8766
 
 Then open [http://127.0.0.1:8766](http://127.0.0.1:8766). The frontend automatically uses the new same-origin address; there is no separate API configuration to update.
 
+> **Binding to `0.0.0.0` hands the agent to the network.** `MAWOAGENT_WEB_HOST=0.0.0.0` disables every protection the UI has: the `Host` allowlist defends against DNS rebinding, not against a client that sets the header; `GET /` issues a session cookie without credentials; the CSRF token is returned by `GET /api/config`; and a pending approval can be approved by the same client that triggered it. Use an SSH tunnel instead — see [docs/web-workspace.md](docs/web-workspace.md).
+
 | Change | How it takes effect |
 | --- | --- |
 | Existing HTML, CSS, or JS files in `web/` | Save and refresh the browser; there is no hot reload |
@@ -435,6 +437,8 @@ python -m agents.web --port 8766
 ```
 
 此时访问 [http://127.0.0.1:8766](http://127.0.0.1:8766)。端口更改后，前端会自动使用新的同源地址，无需单独修改 API 配置。
+
+> **绑定 `0.0.0.0` 等于把这个 Agent 交给网络。** 设置 `MAWOAGENT_WEB_HOST=0.0.0.0` 会让界面现有的所有防护同时失效：`Host` 白名单防的是浏览器 DNS rebinding，挡不住自己填这个头的客户端；`GET /` 不需要任何凭据就下发会话 Cookie；CSRF 标识由 `GET /api/config` 明文返回；待审批的操作可以被同一个客户端自行放行。需要远程访问请用 SSH 隧道，详见 [docs/web-workspace.md](docs/web-workspace.md)。
 
 | 修改内容 | 生效方式 |
 | --- | --- |

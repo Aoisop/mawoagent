@@ -1,5 +1,46 @@
 # 版本记录
 
+## 未发布 — 安全修复（2026-10-29）
+
+v1.0.0 之后的一轮代码审计与修复，共 33 项发现。完整的验证记录与 PoC 见
+[docs/records/scans/code-audit-2026-10-28.md](docs/records/scans/code-audit-2026-10-28.md)。
+
+### 安全修复
+
+- **仓库内容按未信任处理**：`.mawoagent/skills`、`.mawoagent/agents`、`CLAUDE.md`、`.mawoagent/rules`
+  在项目被 `/trust-project` 之前只显示名称，不进入系统提示词；`@include` 只能指向项目内，上限 64 KB。
+- **项目 MCP 配置需要信任**：未信任仓库的 `.mcp.json` 不再被加载；远程 MCP 只接受 `http`/`https`，
+  `file://` 曾被 urllib 的 `FileHandler` 接受并读取本地文件。
+- **`/undo` 与快照**：回滚路径与 blob 摘要都做包含性校验，`meta.json` 里的 `../` 不再能写到工作区外。
+- **权限语义**：`bypassPermissions` 不再跳过 deny 规则；`\\?\` 前缀不再剥离策略文件的保护属性；
+  用户级 `~/.mawoagent/settings.json` 与信任登记表纳入绝对保护。
+- **`.env` 只从当前目录读取**：此前 `find_dotenv(usecwd=True)` 仍会向上走到根目录，仓库可以借此
+  把 API 端点指向自己，同时把用户真实密钥带过去。
+- **`run_shell` 剥离密钥环境变量**：`*_API_KEY`、`*_TOKEN`、`*_SECRET` 等不再传给子进程。
+- **审计日志**：命令串里的令牌也会脱敏；日志文件纳入受保护路径；追加加锁并保留三代轮转，读回时跨代合并。
+
+### 修复
+
+- `write_file` 写记忆目录不再用旧实现重建 `MEMORY.md`（会丢 `source`/`scope` 与条数上限）。
+- 记忆召回在注入头里带上 `source`，`name`/`description` 的换行不再能伪造索引行。
+- `plan` 模式禁止 `memory_save` / `memory_archive` / `memory_restore`。
+- 调度：`permission_mode` 白名单（拒绝 `bypassPermissions`），`load_spec` 执行校验，命令改为参数数组。
+- 延迟工具激活、提示词构建、`run_shell` 的 cwd 都跟随会话工作区，不再共用进程级状态。
+- `list_files` / `grep_search` 对每个发现的路径应用工作区边界，`..` 模式直接拒绝。
+- fork 技能的子代理有深度上限；副本模式不再跟随符号链接。
+
+### 变更（升级时请留意）
+
+- `bypassPermissions` 现在仍受 deny 规则约束：这是语义变更，依赖"yolo 可读被 deny 路径"的用法会失效。
+- 未信任仓库的技能/代理只显示名称，调用会返回错误，直到执行 `/trust-project`。
+- 未信任仓库的 `.mcp.json` 不会被加载，启动时会在日志中提示。
+
+### 已知限制（未修复）
+
+- Web 绑定 `0.0.0.0` 时防护不构成认证，详见 [docs/web-workspace.md](docs/web-workspace.md)。
+- 默认允许读取工作区外的文件（`workspace_only_reads=false`），这与"本地编码助手"的定位一致。
+
+
 ## v1.0.0 — 2026-10-28
 
 本版完成迭代 I7，路线图 21 个任务全部交付（I0–I7）。1.0 的含义是：接口与状态布局已稳定，后续变更是兼容性变更而不是返工。

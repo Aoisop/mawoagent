@@ -48,6 +48,28 @@ class ExecutionBackend:
         raise NotImplementedError
 
 
+# Credentials in the parent environment are not part of the tool's contract.
+# A command that needs one has to be given it deliberately.
+SECRET_ENV_MARKERS = ("API_KEY", "APIKEY", "ACCESS_TOKEN", "AUTH_TOKEN", "SECRET", "PASSWORD", "CREDENTIAL")
+SECRET_ENV_SUFFIXES = ("_TOKEN", "_KEY", "_SECRET", "_PASSWORD", "_CREDENTIALS")
+
+
+def _is_secret_env(name: str) -> bool:
+    upper = name.upper()
+    if any(marker in upper for marker in SECRET_ENV_MARKERS):
+        return True
+    return any(upper.endswith(suffix) for suffix in SECRET_ENV_SUFFIXES)
+
+
+def shell_environment(extra: dict[str, str] | None = None) -> dict[str, str]:
+    """The parent environment minus credentials, plus anything explicit."""
+
+    environment = {key: value for key, value in os.environ.items() if not _is_secret_env(key)}
+    if extra:
+        environment.update(extra)
+    return environment
+
+
 class LocalBackend(ExecutionBackend):
     """Runs the command directly on the host, as the runtime always has."""
 
@@ -70,7 +92,7 @@ class LocalBackend(ExecutionBackend):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=str(cwd) if cwd else None,
-                env={**os.environ, **env} if env else None,
+                env=shell_environment(env),
                 start_new_session=os.name != "nt",
             )
             output_task = asyncio.create_task(process.communicate())
@@ -174,6 +196,10 @@ class DockerBackend(ExecutionBackend):
             "--cpus", self.cpus,
             "--pids-limit", str(self.pids_limit),
             "--security-opt", "no-new-privileges",
+            # A build does not need to change ownership, load modules or mount
+            # anything; dropping the capability set costs nothing and removes the
+            # ways out of the container that do not need a kernel bug.
+            "--cap-drop", "ALL",
             "-v", f"{workspace}:{self.workspace_mount}",
             "-w", self.workspace_mount,
         ]

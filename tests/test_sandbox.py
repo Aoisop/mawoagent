@@ -19,6 +19,35 @@ def run(coro):
     return asyncio.run(coro)
 
 
+class ShellEnvironmentTests(unittest.TestCase):
+    """Credentials in the parent environment are not part of the tool contract."""
+
+    def test_secret_variables_are_removed(self) -> None:
+        with mock.patch.dict(os.environ, {
+            "APIKEY": "a", "OPENAI_API_KEY": "b", "GITHUB_TOKEN": "c",
+            "DB_PASSWORD": "d", "PATH": "/usr/bin", "HOME": "/home/x",
+        }, clear=True):
+            environment = sandbox.shell_environment()
+        for name in ("APIKEY", "OPENAI_API_KEY", "GITHUB_TOKEN", "DB_PASSWORD"):
+            self.assertNotIn(name, environment)
+        self.assertIn("PATH", environment)
+        self.assertIn("HOME", environment)
+
+    def test_explicit_values_still_pass_through(self) -> None:
+        with mock.patch.dict(os.environ, {"APIKEY": "a"}, clear=True):
+            environment = sandbox.shell_environment({"DEPLOY_TOKEN": "explicit"})
+        self.assertEqual(environment["DEPLOY_TOKEN"], "explicit")
+
+    def test_a_command_cannot_read_back_the_key(self) -> None:
+        with mock.patch.dict(os.environ, {"APIKEY": "sk-hidden"}, clear=False):
+            result = run(LocalBackend().run(
+                f'"{sys.executable}" -c "import os; print(os.environ.get(\'APIKEY\', \'absent\'))"',
+                timeout_s=10,
+            ))
+        self.assertIn("absent", result.stdout)
+        self.assertNotIn("sk-hidden", result.stdout)
+
+
 class LocalBackendTests(unittest.TestCase):
     def setUp(self) -> None:
         self.backend = LocalBackend()
@@ -197,6 +226,11 @@ class DockerBackendTests(unittest.TestCase):
         self.assertEqual(args[args.index("--memory") + 1], "2g")
         self.assertEqual(args[args.index("--cpus") + 1], "2")
         self.assertEqual(args[args.index("--pids-limit") + 1], "256")
+
+    def test_capabilities_are_dropped(self) -> None:
+        args = self.args()
+        self.assertEqual(args[args.index("--cap-drop") + 1], "ALL")
+        self.assertIn("no-new-privileges", args[args.index("--security-opt") + 1])
 
     def test_only_the_workspace_is_mounted(self) -> None:
         mounts = [args for args in self.args() if ":/work" in args]
