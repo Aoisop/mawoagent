@@ -312,11 +312,14 @@ class McpConnection:
 
     async def initialize(self) -> None:
         """执行 MCP 初始化握手。"""
+        from .version import __version__
+
         # initialize 是 MCP 连接建立后的第一步，用于协商协议版本和客户端信息。
         result = await self._send_request("initialize", {
             "protocolVersion": MCP_PROTOCOL_VERSION,
             "capabilities": {},
-            "clientInfo": {"name": "mawoagent", "version": "1.0.0"},
+            # Read the version instead of repeating it; the literal here drifted.
+            "clientInfo": {"name": "mawoagent", "version": __version__},
         })
         version = result.get("protocolVersion") if isinstance(result, dict) else None
         if version and version not in SUPPORTED_PROTOCOL_VERSIONS:

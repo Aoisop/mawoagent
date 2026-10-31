@@ -252,7 +252,7 @@ The roadmap is split into eight iterations (I0–I7) covering 21 tasks and six r
 | I6 Learning and automation | 3 | 3 |
 | I7 Packaging and release | 3 | 3 |
 
-Current status: **21 of 21 tasks**, released as **v1.0.0**. Two things still need another environment to verify: behaviour inside a container, and a real remote MCP server. The [roadmap](docs/iteration-roadmap-2026-10-19.md) defines every task and its acceptance criteria; the [progress table](docs/iteration-progress.md) records what is delivered, what it was verified with, and which defects are still open.
+Current status: **21 of 21 tasks**, released as **v1.0.1** (a security patch over v1.0.0). Two things still need another environment to verify: behaviour inside a container, and a real remote MCP server. The [roadmap](docs/iteration-roadmap-2026-10-19.md) defines every task and its acceptance criteria; the [progress table](docs/iteration-progress.md) records what is delivered, what it was verified with, and which defects are still open.
 
 ### More documentation
 
@@ -533,7 +533,7 @@ Shell 命令走可插拔的执行后端：`MAWOAGENT_SANDBOX=local`（默认）�
 | I6 学习与自动化 | 3 | 3 |
 | I7 打包与发布 | 3 | 3 |
 
-当前进度：**21 个任务全部完成**，已发布 **v1.0.0**。仍有两项需要在其他环境验证：容器内行为与真实远程 MCP 服务端。[计划表](docs/iteration-roadmap-2026-10-19.md)定义每个任务及其验收标准，[进度表](docs/iteration-progress.md)记录已交付内容、对应的验证证据，以及尚未闭合的缺陷。
+当前进度：**21 个任务全部完成**，已发布 **v1.0.1**（在 v1.0.0 之上的安全修复）。仍有两项需要在其他环境验证：容器内行为与真实远程 MCP 服务端。[计划表](docs/iteration-roadmap-2026-10-19.md)定义每个任务及其验收标准，[进度表](docs/iteration-progress.md)记录已交付内容、对应的验证证据，以及尚未闭合的缺陷。
 
 ### 更多文档
 
