@@ -82,6 +82,33 @@ class DenyRuleTests(unittest.TestCase):
             allowed = _discovery_path_filter("grep_search", "bypassPermissions")
         self.assertFalse(allowed(Path("secrets.txt")))
 
+    def test_a_glob_in_the_middle_of_a_command_rule_matches(self) -> None:
+        rules = {"allow": [], "deny": [{"tool": "run_shell", "pattern": "*rm -rf*"}]}
+        with patch("agents.tools.load_permission_rules", return_value=rules):
+            for command in ("rm -rf /", "cd / && rm -rf /", "true; rm -rf ~"):
+                with self.subTest(command=command):
+                    verdict = check_permission("run_shell", {"command": command}, "default")
+                    self.assertEqual(verdict["action"], "deny")
+            self.assertEqual(check_permission("run_shell", {"command": "ls"}, "default")["action"], "confirm")
+
+
+class DeferredToolScopeTests(unittest.TestCase):
+    """Activation belongs to one agent, not to the process."""
+
+    def test_one_agents_search_does_not_widen_another(self) -> None:
+        from agents import tools as tools_module
+
+        first: set[str] = set()
+        second: set[str] = set()
+
+        tools_module._tool_search({"query": "plan"}, first)
+
+        deferred = {t["name"] for t in tools_module.tool_definitions if t.get("deferred")}
+        names_first = {t["name"] for t in tools_module.get_active_tool_definitions(tools_module.tool_definitions, first)}
+        names_second = {t["name"] for t in tools_module.get_active_tool_definitions(tools_module.tool_definitions, second)}
+        self.assertTrue(deferred & names_first)
+        self.assertFalse(deferred & names_second)
+
 
 if __name__ == "__main__":
     unittest.main()

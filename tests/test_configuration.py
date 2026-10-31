@@ -136,6 +136,18 @@ class ConfigurationTests(unittest.TestCase):
             finally:
                 os.chdir(previous)
 
+    def test_an_unparseable_numeric_setting_names_the_variable(self):
+        with patch.dict(os.environ, {"MAWOAGENT_SHUTDOWN_TIMEOUT": "soon"}, clear=False):
+            with self.assertRaises(ValueError) as caught:
+                resolve_agent_options(api_config=(None, "k", False))
+        self.assertIn("MAWOAGENT_SHUTDOWN_TIMEOUT", str(caught.exception))
+        self.assertIn("soon", str(caught.exception))
+
+    def test_an_empty_numeric_setting_falls_back_to_the_default(self):
+        with patch.dict(os.environ, {"MAWOAGENT_SHUTDOWN_TIMEOUT": "  "}, clear=False):
+            options = resolve_agent_options(api_config=(None, "k", False))
+        self.assertEqual(options["shutdown_timeout"], 5.0)
+
 
 if __name__ == "__main__":
     unittest.main()

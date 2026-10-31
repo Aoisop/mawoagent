@@ -237,6 +237,9 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
         self._background_semaphore = None
         self._background_job_ids: set[str] = set()
         self._budget_parent: Agent | None = None
+        # Deferred tools are per instance: one session searching must not widen
+        # the schema list another session is running with.
+        self._activated_tools: set[str] = set()
         self._active_children: list[Agent] = []
         self._memory_tasks: set[asyncio.Task] = set()
         self.confirm_fn = confirm_fn
@@ -1218,7 +1221,8 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
         if self._mcp_manager.is_mcp_tool(name):
             return await self._mcp_manager.call_tool(name, inp)
         result = await execute_tool(name, inp, self._read_file_state, truncate_result=False,
-                                    permission_mode=self.permission_mode)
+                                    permission_mode=self.permission_mode,
+                                    activated=self._activated_tools)
         if name in {"skill_create", "skill_evolve"}:
             try:
                 parsed = json.loads(result)
@@ -1610,7 +1614,7 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
                 "model": self.model,
                 "max_tokens": max_output if self._thinking_mode != "disabled" else (self.max_output_tokens or 16384),
                 "system": _safe_utf8_text(self._system_prompt),
-                "tools": _sanitize_for_utf8(get_active_tool_definitions(self.tools)),
+                "tools": _sanitize_for_utf8(get_active_tool_definitions(self.tools, self._activated_tools)),
                 "messages": _sanitize_for_utf8(self._anthropic_messages),
             }
             #如果开启了思考模式，就给 Anthropic 请求加上 thinking 参数。
@@ -1844,7 +1848,7 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
             self._require_model_budget()
             create_params = dict(
                 model=self.model,
-                tools=_sanitize_for_utf8(_to_openai_tools(get_active_tool_definitions(self.tools))),
+                tools=_sanitize_for_utf8(_to_openai_tools(get_active_tool_definitions(self.tools, self._activated_tools))),
                 messages=_sanitize_for_utf8(self._openai_messages),
                 stream=True,
                 stream_options={"include_usage": True},

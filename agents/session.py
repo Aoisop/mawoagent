@@ -28,8 +28,20 @@ def get_project_session_dir() -> Path:
     return d
 
 
+SESSION_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
+
+
+def _checked_session_id(session_id: str) -> str:
+    """A session id becomes a file name, on write as well as on read."""
+
+    if not SESSION_ID_RE.fullmatch(str(session_id)):
+        raise ValueError("session id may only contain letters, digits, '-' and '_'")
+    return str(session_id)
+
+
 def save_session(session_id: str, data: dict[str, Any]) -> None:
     _ensure_dir()
+    session_id = _checked_session_id(session_id)
     data = {**data, "metadata": {**data.get("metadata", {}),
                                "updatedAt": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                                "updatedAtNs": time.time_ns()}}
@@ -37,13 +49,14 @@ def save_session(session_id: str, data: dict[str, Any]) -> None:
 
 
 def save_folded_session_memory(session_id: str, record: dict[str, Any]) -> None:
+    session_id = _checked_session_id(session_id)
     d = get_project_session_dir()
     append_jsonl(d / f"{session_id}.folded-memory.jsonl", record)
     write_json(d / f"{session_id}.folded-memory.latest.json", record)
 
 
 def load_session(session_id: str) -> dict[str, Any] | None:
-    if not re.fullmatch(r"[A-Za-z0-9_-]+", session_id):
+    if not SESSION_ID_RE.fullmatch(str(session_id)):
         return None
     path = SESSION_DIR / f"{session_id}.json"
     if not path.exists():

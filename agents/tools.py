@@ -478,21 +478,26 @@ _activated_tools: set[str] = set()
 def reset_activated_tools() -> None:
     _activated_tools.clear()
 
-def get_active_tool_definitions(all_tools: list[ToolDef] | None = None) -> list[ToolDef]:
+def get_active_tool_definitions(all_tools: list[ToolDef] | None = None,
+                                activated: set[str] | None = None) -> list[ToolDef]:
     """Return active API schemas without internal deferred-tool metadata."""
+
     tools = all_tools if all_tools is not None else tool_definitions
+    active_set = _activated_tools if activated is None else activated
     active: list[ToolDef] = []
     for tool in tools:
-        if tool.get("deferred") and tool["name"] not in _activated_tools:
+        if tool.get("deferred") and tool["name"] not in active_set:
             continue
         schema = tool.copy()
         schema.pop("deferred", None)
         active.append(schema)
     return active
 
-def get_deferred_tool_names(all_tools: list[ToolDef] | None = None) -> list[str]:
+def get_deferred_tool_names(all_tools: list[ToolDef] | None = None,
+                            activated: set[str] | None = None) -> list[str]:
     tools = all_tools if all_tools is not None else tool_definitions
-    return [t["name"] for t in tools if t.get("deferred") and t["name"] not in _activated_tools]
+    active_set = _activated_tools if activated is None else activated
+    return [t["name"] for t in tools if t.get("deferred") and t["name"] not in active_set]
 
 #执行shell命令
 async def _run_shell(inp: ToolInput) -> str:
@@ -502,7 +507,13 @@ async def _run_shell(inp: ToolInput) -> str:
         return "Error: timeout must be positive"
     try:
         backend = get_backend()
-        result = await backend.run(inp["command"], timeout_s=timeout_s)
+        # Run where the agent is bound, not where the process was started: a
+        # container mount of Path.cwd() is the wrong directory in every
+        # multi-workspace setup.
+        context = current_workspace()
+        result = await backend.run(
+            inp["command"], timeout_s=timeout_s, cwd=context.root if context else None
+        )
     except asyncio.CancelledError:
         raise
     except Exception as e:
@@ -669,8 +680,10 @@ def _matches_rule(rule: dict, tool_name: str, inp: dict) -> bool:
         return False
 
     pattern = rule["pattern"]
-    if pattern.endswith("*"):
-        return value.startswith(pattern[:-1])
+    # A glob can sit anywhere in the pattern: "run_shell(*rm -rf*)" has to match
+    # a command where the dangerous part is not at the start.
+    if "*" in pattern or "?" in pattern:
+        return fnmatch.fnmatchcase(value, pattern)
     return value == pattern
 
 
@@ -863,7 +876,7 @@ def check_permission(
 #----------------执行工具调用-----------------------
 # 'agent' 和 'skill' 这两个工具在 agent.py 中处理，以避免循环依赖。"
 
-def _tool_search(inp: ToolInput) -> str:
+def _tool_search(inp: ToolInput, activated: set[str] | None = None) -> str:
     query = (inp.get("query") or "").lower()
     matches = [
         tool for tool in tool_definitions
@@ -873,7 +886,8 @@ def _tool_search(inp: ToolInput) -> str:
     if not matches:
         return "No matching deferred tools found."
 
-    _activated_tools.update(tool["name"] for tool in matches)
+    target = _activated_tools if activated is None else activated
+    target.update(tool["name"] for tool in matches)
     return json.dumps(
         [{"name": tool["name"], "description": tool.get("description", ""), "input_schema": tool["input_schema"]}
          for tool in matches],
@@ -991,6 +1005,7 @@ def _memory_restore(inp: ToolInput) -> str:
 async def execute_tool(
     name: str, inp: ToolInput, read_file_state: dict[str, FileVersion] | None = None, *,
     truncate_result: bool = True, permission_mode: PermissionMode = "default",
+    activated: set[str] | None = None,
 ) -> str:
     from .validation import validate_json
 
@@ -1007,7 +1022,7 @@ async def execute_tool(
 
     if name == "tool_search":
         # Return the complete schema payload even when ordinary output is capped.
-        return _tool_search(inp)
+        return _tool_search(inp, activated)
 
     if name == "run_shell":
         # Shell execution must remain awaitable so cancellation kills descendants.

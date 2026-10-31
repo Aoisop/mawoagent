@@ -70,6 +70,18 @@ def resolve_api_config(cli_api_base: str | None = None) -> tuple[str | None, str
     return None, generic_api_key, False
 
 
+def _env_number(name: str, default: float, cast=float):
+    """Read a numeric setting, naming the variable when it cannot be parsed."""
+
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return default
+    try:
+        return cast(raw)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a number, got {raw!r}") from exc
+
+
 def resolve_agent_options(
     *,
     api_config: tuple[str | None, str | None, bool] | None = None,
@@ -92,16 +104,16 @@ def resolve_agent_options(
         "api_protocol": "openai" if use_openai else "anthropic",
         "input_price_per_million": (
             input_price if input_price is not None
-            else float(os.environ.get("MAWOAGENT_INPUT_PRICE_PER_MILLION", "3"))
+            else _env_number("MAWOAGENT_INPUT_PRICE_PER_MILLION", 3.0)
         ),
         "output_price_per_million": (
             output_price if output_price is not None
-            else float(os.environ.get("MAWOAGENT_OUTPUT_PRICE_PER_MILLION", "15"))
+            else _env_number("MAWOAGENT_OUTPUT_PRICE_PER_MILLION", 15.0)
         ),
-        "shutdown_timeout": float(os.environ.get("MAWOAGENT_SHUTDOWN_TIMEOUT", "5")),
+        "shutdown_timeout": _env_number("MAWOAGENT_SHUTDOWN_TIMEOUT", 5.0),
         "context_window": context_window or (
-            int(os.environ["MAWOAGENT_CONTEXT_WINDOW"]) if os.environ.get("MAWOAGENT_CONTEXT_WINDOW") else None
+            _env_number("MAWOAGENT_CONTEXT_WINDOW", 0, int) or None
         ),
-        "background_skill_concurrency": int(os.environ.get("MAWOAGENT_SKILL_CONCURRENCY", "2")),
-        "background_skill_queue_limit": int(os.environ.get("MAWOAGENT_SKILL_QUEUE_LIMIT", "16")),
+        "background_skill_concurrency": _env_number("MAWOAGENT_SKILL_CONCURRENCY", 2, int),
+        "background_skill_queue_limit": _env_number("MAWOAGENT_SKILL_QUEUE_LIMIT", 16, int),
     }
