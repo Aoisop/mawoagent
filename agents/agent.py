@@ -53,6 +53,9 @@ from agents.ui import (
 # 指数退避重试
 
 
+MAX_AGENT_DEPTH = 2
+
+
 def _is_retryable(error: Exception) -> bool:
     status = getattr(error, "status_code", None) or getattr(error, "status", None)
     if status in (429, 503, 529):
@@ -240,6 +243,8 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
         # Deferred tools are per instance: one session searching must not widen
         # the schema list another session is running with.
         self._activated_tools: set[str] = set()
+        # Nesting depth, so a fork skill cannot spawn itself without bound.
+        self._agent_depth = 0
         self._active_children: list[Agent] = []
         self._memory_tasks: set[asyncio.Task] = set()
         self.confirm_fn = confirm_fn
@@ -311,7 +316,7 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
         self._last_tool_name: str = ""
 
         #构建系统提示词
-        self._base_system_prompt = custom_system_prompt or build_system_prompt()
+        self._base_system_prompt = custom_system_prompt or build_system_prompt(self.workspace.root)
 
         if self.permission_mode == "plan":
             self._plan_file_path = self._generate_plan_file_path()
@@ -624,7 +629,7 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
     def _refresh_runtime_system_prompt(self) -> None:
         if self._custom_system_prompt is not None:
             return
-        self._base_system_prompt = build_system_prompt()
+        self._base_system_prompt = build_system_prompt(self.workspace.root)
         if self.permission_mode == "plan":
             self._system_prompt = self._base_system_prompt + self._build_plan_mode_prompt()
         else:
@@ -1264,15 +1269,19 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
             tools = self.tools if allowed_tools is None else [
                 tool for tool in self.tools if tool["name"] in allowed_tools
             ]
-            return await self._run_child_agent(
-                agent_type="skill-fork",
-                description=inp.get("skill_name", ""),
-                system_prompt=result["prompt"],
-                tools=tools,
-                prompt=inp.get("args") or "Execute this skill task.",
-                label="Skill fork",
-                empty_result="(Skill produced no output)",
-            )
+            try:
+                return await self._run_child_agent(
+                    agent_type="skill-fork",
+                    description=inp.get("skill_name", ""),
+                    system_prompt=result["prompt"],
+                    tools=tools,
+                    prompt=inp.get("args") or "Execute this skill task.",
+                    label="Skill fork",
+                    empty_result="(Skill produced no output)",
+                )
+            except ValueError as exc:
+                # Depth limit: a fork skill cannot keep forking forever.
+                return f"Error: {exc}"
 
         return f'[Skill "{inp.get("skill_name", "")}" activated]\n\n{result["prompt"]}'
 
@@ -1378,7 +1387,7 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
 
     async def _execute_agent_tool(self, inp: dict) -> str:
         try:
-            config = get_sub_agent_config(inp.get("type", "general"))
+            config = get_sub_agent_config(inp.get("type", "general"), self.workspace.root)
         except ValueError as exc:
             # An agent type defined by an untrusted checkout is listed but not runnable.
             return f"Error: {exc}"
@@ -1394,6 +1403,14 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
 
     def _create_child_agent(self, *, system_prompt: str, tools: list[ToolDef]) -> Agent:
         """Inherit runtime limits and permissions consistently for every child."""
+        if self._agent_depth >= MAX_AGENT_DEPTH:
+            raise ValueError(
+                f"sub-agent nesting limit reached ({MAX_AGENT_DEPTH}); "
+                "finish this level before starting another"
+            )
+        # 'skill' stays available: a fork skill may legitimately invoke another
+        # one. Recursion is bounded by the depth limit above instead of by
+        # removing the tool.
         forbidden = {"agent", "enter_plan_mode", "exit_plan_mode"}
         child_tools = [tool for tool in tools if tool["name"] not in forbidden]
         child = Agent(
@@ -1432,6 +1449,7 @@ class Agent(BackgroundSkillTasks, ToolExecution, ContextRuntime, StreamAttempts,
         if inherited_mcp_tools:
             child._mcp_manager = BorrowedMcpManager(self._mcp_manager, inherited_mcp_tools)
             child._mcp_initialized = True
+        child._agent_depth = self._agent_depth + 1
         return child
 
     async def _run_child_agent(self, *, agent_type: str, description: str,

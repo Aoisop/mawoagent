@@ -283,6 +283,28 @@ def _changed_files(before: dict[str, str], after: dict[str, str]) -> list[str]:
     return changed
 
 
+def _prune_escaping_links(root: Path) -> None:
+    """Remove links that point outside the copy before the command runs.
+
+    Copying with symlinks=True keeps a link to an outside directory from
+    dragging the whole filesystem into the temp copy. What is left is a link
+    that still points outside, and a command writing through it would touch the
+    original file — so those links are removed instead.
+    """
+
+    resolved_root = root.resolve()
+    for path in root.rglob("*"):
+        if not path.is_symlink():
+            continue
+        try:
+            path.resolve(strict=False).relative_to(resolved_root)
+        except (OSError, ValueError):
+            try:
+                path.unlink()
+            except OSError:
+                pass
+
+
 class CopyingBackend(ExecutionBackend):
     """Runs the command against a throwaway copy of the workspace.
 
@@ -314,7 +336,11 @@ class CopyingBackend(ExecutionBackend):
         before = _relative_files(source)
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "workspace"
-            shutil.copytree(source, target, ignore=shutil.ignore_patterns(*_COPY_IGNORE))
+            # symlinks=True: a link to a large directory outside the workspace
+            # must not be materialised into the copy.
+            shutil.copytree(source, target, symlinks=True,
+                            ignore=shutil.ignore_patterns(*_COPY_IGNORE))
+            _prune_escaping_links(target)
             result = await self.inner.run(command, timeout_s=timeout_s, cwd=target, env=env)
             result.changed = _changed_files(before, _relative_files(target))
             result.backend = self.name

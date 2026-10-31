@@ -184,9 +184,11 @@ def _load_rules_dir(directory: Path) -> str:
         return ""
 
 
-def load_claude_md() -> str:
+def load_claude_md(root: Path | str | None = None) -> str:
     """Collect CLAUDE.md files, gated by whether the project is trusted.
 
+    *root* is the workspace; the walk starts there rather than at the process
+    cwd, so an agent bound elsewhere reads its own project's instructions.
     Instructions and rules inside the workspace come from the repository, so an
     untrusted checkout contributes nothing but a note saying why. Files above
     the workspace belong to the user's own machine and stay.
@@ -195,12 +197,12 @@ def load_claude_md() -> str:
     from .project_trust import is_project_trusted
     from .workspace import project_root
 
-    project = project_root().resolve()
+    project = Path(root).resolve() if root is not None else project_root().resolve()
     trusted = is_project_trusted(project)
     notices: list[str] = []
     parts: list[str] = []
     skipped_project_file = False
-    d = Path.cwd().resolve()
+    d = project
     while True:
         f = d / "CLAUDE.md"
         inside_project = _is_inside(f.parent, project)
@@ -268,17 +270,26 @@ def get_git_context() -> str:
         return ""
 
 
-def build_system_prompt() -> str:
-    """Build the full system prompt from embedded template + dynamic context."""
+def build_system_prompt(root: Path | str | None = None) -> str:
+    """Build the full system prompt from embedded template + dynamic context.
+
+    *root* is the workspace the agent is bound to. Without it the process cwd is
+    used, which describes the wrong directory whenever the agent runs somewhere
+    else (evaluation copies, sub-agents, multi-workspace web sessions).
+    """
+
+    from .workspace import project_root
+
+    base = Path(root) if root is not None else project_root()
     from datetime import date
     today = date.today().isoformat()
     plat = f"{platform.system()} {platform.machine()}"
     shell = (os.environ.get("ComSpec") or "cmd.exe") if sys.platform == "win32" else os.environ.get("SHELL", "/bin/sh")
     git_context = get_git_context()
-    claude_md = load_claude_md()
+    claude_md = load_claude_md(base)
     memory_section = build_memory_prompt_section()
-    skills_section = build_skill_descriptions()
-    agent_section = build_agent_descriptions()
+    skills_section = build_skill_descriptions(base)
+    agent_section = build_agent_descriptions(base)
 
     deferred_names = get_deferred_tool_names()
     deferred_section = (
@@ -287,7 +298,7 @@ def build_system_prompt() -> str:
     )
 
     replacements = {
-        "{{cwd}}": str(Path.cwd()),
+        "{{cwd}}": str(base),
         "{{date}}": today,
         "{{platform}}": plat,
         "{{shell}}": shell,
@@ -305,7 +316,7 @@ def build_system_prompt() -> str:
     # Optional outline of the workspace; empty when disabled or unavailable.
     try:
         from .repo_index import build_repo_map_section
-        repo_map = build_repo_map_section()
+        repo_map = build_repo_map_section(base)
     except (OSError, ValueError):
         repo_map = ""
     if repo_map:

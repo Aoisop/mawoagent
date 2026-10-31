@@ -81,12 +81,12 @@ def get_skill_by_name(skill_name:str)->SkillDefinition | None:
             return s
     return None
 
-def discover_skills() -> list[SkillDefinition]:
+def discover_skills(project: Path | None = None) -> list[SkillDefinition]:
     global _cached_skills, _cached_skill_signature
     from .project_trust import is_project_trusted
     from .workspace import project_root
 
-    project = project_root()
+    project = Path(project) if project is not None else project_root()
     roots = [Path.home() / ".mawoagent" / "skills", project / ".mawoagent" / "skills"]
     signature = []
     for root in roots:
@@ -194,9 +194,9 @@ def _parse_skill_file(file_path: Path, source: str, skill_dir: str) -> SkillDefi
         return None
 
 
-def build_skill_descriptions() -> str:
+def build_skill_descriptions(root: Path | None = None) -> str:
     # 把已加载的 skills 写进 system prompt，让模型知道哪些 skill 可用。
-    skills = discover_skills()
+    skills = discover_skills(root)
 
     lines = ["# Available Skills", ""]
     if not skills:

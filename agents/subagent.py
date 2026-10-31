@@ -84,13 +84,13 @@ _cached_custom_agents: dict[str, dict] | None = None
 _cached_agent_signature = None
 
 
-def _discover_custom_agents() -> dict[str, dict]:
+def _discover_custom_agents(project: Path | None = None) -> dict[str, dict]:
     """发现用户级和项目级自定义代理，并按代理名称返回配置。"""
     global _cached_custom_agents, _cached_agent_signature
     from .project_trust import is_project_trusted
     from .workspace import project_root
 
-    project = project_root()
+    project = Path(project) if project is not None else project_root()
     roots = [Path.home() / ".mawoagent" / "agents", project / ".mawoagent" / "agents"]
     signature = []
     for root in roots:
@@ -165,9 +165,9 @@ def _load_agents_from_dir(directory: Path, agents: dict[str, dict]) -> None:
 
 
 
-def get_sub_agent_config(agent_type: str) -> dict:
+def get_sub_agent_config(agent_type: str, project: Path | None = None) -> dict:
     """根据代理类型生成 Agent 运行时需要的 system_prompt 和 tools 配置。"""
-    custom = _discover_custom_agents().get(agent_type)
+    custom = _discover_custom_agents(project).get(agent_type)
     if custom:
         if not custom.get("trusted", True):
             raise ValueError(
@@ -196,22 +196,22 @@ def get_sub_agent_config(agent_type: str) -> dict:
 # ─── 可用的agent类型(for system prompt) ──────────────
 
 
-def get_available_agent_types() -> list[dict[str, str]]:
+def get_available_agent_types(project: Path | None = None) -> list[dict[str, str]]:
     """返回系统提示词中可展示的全部代理类型说明，包括内置代理和自定义代理。"""
     types = [
         {"name": "explore", "description": "Fast, read-only codebase search and exploration"},
         {"name": "plan", "description": "Read-only analysis with structured implementation plans"},
         {"name": "general", "description": "Full tools for independent tasks"},
     ]
-    for name, defn in _discover_custom_agents().items():
+    for name, defn in _discover_custom_agents(project).items():
         description = defn["description"] if defn.get("trusted", True) else "(not loaded: project is not trusted)"
         types.append({"name": name, "description": description})
     return types
 
 
-def build_agent_descriptions() -> str:
+def build_agent_descriptions(project: Path | None = None) -> str:
     """把自定义代理类型格式化成 Markdown，供主 Agent 注入到系统提示词中。"""
-    types = get_available_agent_types()
+    types = get_available_agent_types(project)
     if len(types) <= 3:
         return ""  # Only built-in types, already in system prompt
 

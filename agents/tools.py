@@ -376,6 +376,8 @@ def _list_files(inp: ToolInput, path_allowed: Callable[[Path], bool] | None = No
         if path_allowed is not None and not path_allowed(base):
             return "No files found matching the pattern."
         pattern = inp["pattern"]
+        if ".." in Path(pattern).parts:
+            return "Error listing files: the pattern must stay inside the directory"
         files = []
         for p in base.glob(pattern):
             if p.is_file() and (path_allowed is None or path_allowed(p)):
@@ -643,10 +645,23 @@ def _discovery_path_filter(tool_name: str, permission_mode: PermissionMode) -> C
     if any(rule["pattern"] in {None, "*"} for rule in rules):
         return lambda path: False
     patterns = [_permission_patterns(rule["pattern"]) for rule in rules]
-    if not patterns:
+
+    # Discovery tools used to check only their base path, so a glob containing
+    # ".." or a junction could list and read outside the workspace even when the
+    # policy said reads stay inside.
+    workspace = current_workspace()
+    confine = workspace.workspace_only_reads if workspace is not None else False
+
+    if not patterns and not confine:
         return lambda path: True
 
     def allowed(path: Path) -> bool:
+        if confine:
+            try:
+                if workspace.classify(path).scope == "outside":
+                    return False
+            except OSError:
+                return False
         # Checking lexical and resolved parents covers a denied directory
         # discovered from an allowed ancestor and symlinks crossing its boundary.
         candidates = {str(parent) for value in _permission_paths(str(path))
